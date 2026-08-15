@@ -1,6 +1,6 @@
 # r6-notifier
 
-Two small Docker services that track Rainbow Six Siege esports from public data — no login, no automation of your Twitch account, just polling public sources on a schedule.
+Two small Docker services that track Rainbow Six Siege esports from public data, just polling public sources on a schedule.
 
 **🎮 Live page: [revanito.github.io/r6-notifier](https://revanito.github.io/r6-notifier/)**
 

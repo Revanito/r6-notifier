@@ -160,6 +160,28 @@ def render_broadcast_row(b):
     </article>"""
 
 
+def render_reward_card(r):
+    img_html = f'<img class="reward-img" src="{e(r["image"])}" alt="{e(r["name"])}" loading="lazy">' if r.get("image") else ""
+    return f"""
+    <article class="reward-card">
+      {img_html}
+      <div class="reward-name">{e(r["name"])}</div>
+      <div class="reward-time">{e(r["watch_time"])}</div>
+      <div class="reward-campaign">{e(r["campaign"])}</div>
+    </article>"""
+
+
+def render_rewards_section(rewards):
+    if not rewards:
+        return ""
+    cards = "".join(render_reward_card(r) for r in rewards)
+    return f"""
+    <section class="section-rewards">
+      <h2>Active drops</h2>
+      <div class="rewards-grid">{cards}</div>
+    </section>"""
+
+
 def render_section(title, row_htmls, kind, empty_text):
     if not row_htmls:
         body = f'<p class="empty">{e(empty_text)}</p>'
@@ -172,11 +194,12 @@ def render_section(title, row_htmls, kind, empty_text):
     </section>"""
 
 
-def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadcasts=None, drops_channels=None, team_links=None):
+def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadcasts=None, drops_channels=None, team_links=None, rewards=None):
     twitch_info = twitch_info or {}
     broadcasts = broadcasts or []
     drops_channels = drops_channels or set()
     team_links = team_links or {}
+    rewards = rewards or []
 
     live_sorted = sorted(live, key=lambda m: m["timestamp"])
     upcoming_sorted = sorted(upcoming, key=lambda m: m["timestamp"])
@@ -215,6 +238,7 @@ def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadc
 
     if live_rows:
         sections += render_section("Live now", live_rows, "live", "")
+    sections += render_rewards_section(rewards)
     if today_rows:
         sections += render_section("Upcoming today", today_rows, "upcoming", "")
     sections += render_section(f"Upcoming (next {int(UPCOMING_WINDOW_DAYS)} days)", later_rows, "upcoming", "No further matches scheduled in this window.")
@@ -336,6 +360,23 @@ a.team:hover {{ color: var(--accent); text-decoration: underline; }}
   font: 700 0.98rem/1.3 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
   font-stretch: condensed; letter-spacing: 0.01em;
 }}
+.section-rewards h2 {{ color: var(--accent); }}
+.rewards-grid {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }}
+.reward-card {{
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.75rem; display: flex; flex-direction: column; align-items: center;
+  text-align: center; gap: 0.35rem; width: 150px;
+}}
+.reward-img {{
+  width: 64px; height: 64px; object-fit: contain; border-radius: 6px;
+  background: var(--bg-wash); padding: 0.3rem;
+}}
+.reward-name {{ font: 700 0.82rem/1.25 "Segoe UI", -apple-system, sans-serif; }}
+.reward-time {{
+  font: 700 0.7rem/1 -apple-system, sans-serif; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}}
+.reward-campaign {{ font-size: 0.7rem; color: var(--text-dim); }}
 .empty {{
   color: var(--text-dim); font-size: 0.88rem; padding: 1rem; border: 1px dashed var(--border);
   border-radius: 4px; background: var(--bg-wash);
@@ -357,7 +398,7 @@ a {{ color: inherit; }}
   {sections}
   <footer>
     <span>Updated {e(generated_str)}</span>
-    <span>Sources: Ubisoft, Liquipedia</span>
+    <span>Sources: Ubisoft, Liquipedia, twitchdrops.app</span>
   </footer>
 </main>
 </body>
@@ -376,9 +417,9 @@ def build_and_commit():
     upcoming = [m for m in upcoming if m["timestamp"] <= now + UPCOMING_WINDOW_DAYS * 86400]
     completed = [m for m in completed if m["timestamp"] >= now - RESULTS_WINDOW_DAYS * 86400]
 
-    drops_channels = set()
+    rewards, drops_channels = [], set()
     try:
-        _, drops_channels = sources.fetch_active_drops()
+        rewards, drops_channels = sources.fetch_active_drops()
     except Exception:
         log.exception("twitch drops fetch failed")
 
@@ -401,7 +442,8 @@ def build_and_commit():
     generated_at = datetime.now(tz=timezone.utc)
     page = build_html(
         live, upcoming, completed, generated_at,
-        twitch_info=twitch_info, broadcasts=broadcasts, drops_channels=drops_channels, team_links=team_links,
+        twitch_info=twitch_info, broadcasts=broadcasts, drops_channels=drops_channels,
+        team_links=team_links, rewards=rewards,
     )
 
     docs_dir = os.path.join(CLONE_DIR, DOCS_SUBDIR)

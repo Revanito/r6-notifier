@@ -72,7 +72,9 @@ def fetch_active_drops():
     scraping its HTML for the same data is in the same spirit.
 
     Returns (rewards, active_channels):
-    - rewards: [{"name", "watch_time", "campaign"}, ...]
+    - rewards: currently-active rewards only (the page tags expired ones
+      with a "drop-expired" class we filter out) -
+      [{"name", "watch_time", "campaign", "image"}, ...]
     - active_channels: lowercased set of channel logins eligible right now
       (campaign banners whose countdown hasn't ended yet)
     """
@@ -81,14 +83,16 @@ def fetch_active_drops():
     soup = BeautifulSoup(resp.text, "html.parser")
 
     rewards = []
-    for card in soup.select(".drop-card"):
+    for card in soup.select(".drop-card:not(.drop-expired)"):
         name_el = card.select_one(".drop-name")
         time_el = card.select_one(".drop-time")
         campaign_el = card.select_one(".drop-campaign")
+        img_el = card.select_one(".drop-img")
         rewards.append({
             "name": name_el.get_text(strip=True) if name_el else "",
             "watch_time": time_el.get_text(strip=True) if time_el else "",
             "campaign": campaign_el.get_text(strip=True) if campaign_el else "",
+            "image": img_el.get("src") if img_el else None,
         })
 
     now_ms = time.time() * 1000

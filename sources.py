@@ -24,7 +24,89 @@ UBISOFT_URL = "https://www.ubisoft.com/en-us/esports/rainbow-six/siege"
 UBISOFT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 NEXT_DATA_RE = re.compile(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S)
 
+DROPS_URL = "https://twitchdrops.app/game/tom-clancys-rainbow-six-siege"
+DROPS_CHANNEL_RE = re.compile(r"twitch\.tv/([^/?#\"]+)", re.I)
+
 MATCH_DEDUP_BUCKET_SECONDS = 300  # matches within this window are treated as the same match across sources
+
+
+def get_twitch_token(client_id, client_secret):
+    resp = requests.post(
+        "https://id.twitch.tv/oauth2/token",
+        data={"client_id": client_id, "client_secret": client_secret, "grant_type": "client_credentials"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
+
+def fetch_twitch_live_info(client_id, client_secret, channels):
+    """Live status for a set of channel logins. Returns {login: {title, game, viewers}}."""
+    channels = sorted({c.lower() for c in channels if c})
+    if not client_id or not client_secret or not channels:
+        return {}
+
+    token = get_twitch_token(client_id, client_secret)
+    headers = {"Client-Id": client_id, "Authorization": f"Bearer {token}"}
+    params = [("user_login", c) for c in channels]
+    resp = requests.get("https://api.twitch.tv/helix/streams", headers=headers, params=params, timeout=15)
+    resp.raise_for_status()
+
+    info = {}
+    for stream in resp.json().get("data", []):
+        login = stream["user_login"].lower()
+        title = stream.get("title", "")
+        info[login] = {
+            "title": title,
+            "game": stream.get("game_name", ""),
+            "viewers": stream.get("viewer_count", 0),
+        }
+    return info
+
+
+def fetch_active_drops():
+    """Scrapes twitchdrops.app's public R6 Siege page for real drops-campaign
+    data: which channels are currently eligible for drops, and what the
+    rewards actually are. This site publishes a plain-text chatbot API
+    (twitchdrops.app/api/chatbot/...) built for public consumption, so
+    scraping its HTML for the same data is in the same spirit.
+
+    Returns (rewards, active_channels):
+    - rewards: [{"name", "watch_time", "campaign"}, ...]
+    - active_channels: lowercased set of channel logins eligible right now
+      (campaign banners whose countdown hasn't ended yet)
+    """
+    resp = requests.get(DROPS_URL, headers={"User-Agent": UBISOFT_UA}, timeout=20)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    rewards = []
+    for card in soup.select(".drop-card"):
+        name_el = card.select_one(".drop-name")
+        time_el = card.select_one(".drop-time")
+        campaign_el = card.select_one(".drop-campaign")
+        rewards.append({
+            "name": name_el.get_text(strip=True) if name_el else "",
+            "watch_time": time_el.get_text(strip=True) if time_el else "",
+            "campaign": campaign_el.get_text(strip=True) if campaign_el else "",
+        })
+
+    now_ms = time.time() * 1000
+    active_channels = set()
+    for banner in soup.select(".campaign-banner"):
+        timer = banner.select_one(".cb-timer[data-end-ts]")
+        if timer:
+            try:
+                if float(timer["data-end-ts"]) <= now_ms:
+                    continue  # campaign already ended
+            except (ValueError, TypeError):
+                pass
+        for link in banner.select("a.channel-link"):
+            m = DROPS_CHANNEL_RE.search(link.get("href", ""))
+            if m:
+                active_channels.add(m.group(1).lower())
+
+    return rewards, active_channels
 
 
 def _make_key(ts, teams):
@@ -164,13 +246,20 @@ def _bucket(ts):
 
 
 def _merge(primary, secondary, drop_tbd=True):
-    """Primary source wins on overlap; secondary fills in gaps."""
-    primary_buckets = {_bucket(m["timestamp"]) for m in primary}
+    """Primary source wins on overlap, but backfills fields it lacks (e.g.
+    Ubisoft never exposes a twitch_channel) from the matching secondary
+    entry instead of just discarding it. Secondary entries with no bucket
+    match in primary are appended as-is."""
+    primary_by_bucket = {_bucket(m["timestamp"]): m for m in primary}
     combined = list(primary)
     for match in secondary:
         if drop_tbd and "TBD" in match["teams"]:
             continue
-        if _bucket(match["timestamp"]) in primary_buckets:
+        bucket = _bucket(match["timestamp"])
+        existing = primary_by_bucket.get(bucket)
+        if existing is not None:
+            if not existing.get("twitch_channel") and match.get("twitch_channel"):
+                existing["twitch_channel"] = match["twitch_channel"]
             continue
         combined.append(match)
     return combined

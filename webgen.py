@@ -30,6 +30,15 @@ RUN_ON_START = os.environ.get("RUN_ON_START", "false").lower() == "true"
 UPCOMING_WINDOW_DAYS = float(os.environ.get("UPCOMING_WINDOW_DAYS", "30"))
 RESULTS_WINDOW_DAYS = float(os.environ.get("RESULTS_WINDOW_DAYS", "7"))
 
+# Optional: same Twitch app credentials as the Discord notifier. If set, the
+# site can show non-match broadcasts (reveal streams, showcases, ...) as
+# their own "live" card, and tag any live card with a drops badge when the
+# stream title mentions it. If unset, the site just skips this - it still
+# works fine on Ubisoft/Liquipedia match data alone.
+TWITCH_CLIENT_ID = os.environ.get("TWITCH_CLIENT_ID", "")
+TWITCH_CLIENT_SECRET = os.environ.get("TWITCH_CLIENT_SECRET", "")
+TWITCH_CHANNELS = [c.strip().lower() for c in os.environ.get("TWITCH_CHANNELS", "rainbow6").split(",") if c.strip()]
+
 
 def authed_repo_url():
     if REPO_URL.startswith("https://"):
@@ -78,7 +87,7 @@ def e(text):
     return html.escape(str(text))
 
 
-def render_match_row(match, kind):
+def render_match_row(match, kind, drops=False):
     teams = match["teams"]
     when = fmt_dt(match["timestamp"])
     score_html = ""
@@ -103,6 +112,7 @@ def render_match_row(match, kind):
         "upcoming": "",
         "completed": '<span class="badge badge-done">Final</span>',
     }[kind]
+    drops_html = '<span class="badge badge-drops">Drops enabled</span>' if drops else ""
 
     return f"""
     <article class="ticket ticket-{kind}">
@@ -117,15 +127,36 @@ def render_match_row(match, kind):
         <span class="when">{e(when)} Paris</span>
         {twitch_html}
         {badge}
+        {drops_html}
       </div>
     </article>"""
 
 
-def render_section(title, matches, kind, empty_text):
-    if not matches:
+def render_broadcast_row(b):
+    """A live Twitch stream not tied to a tracked match - e.g. a reveal
+    show, dev stream, or anything else airing on a watched channel."""
+    game_html = f' · {e(b["game"])}' if b.get("game") else ""
+    drops_html = '<span class="badge badge-drops">Drops enabled</span>' if b.get("has_drops") else ""
+
+    return f"""
+    <article class="ticket ticket-live ticket-broadcast">
+      <div class="ticket-row ticket-row-broadcast">
+        <span class="broadcast-title">{e(b["title"] or b["channel"])}</span>
+      </div>
+      <div class="ticket-meta">
+        <span class="tournament">twitch.tv/{e(b["channel"])}{game_html}</span>
+        <a class="twitch-link" href="https://www.twitch.tv/{e(b["channel"])}" target="_blank" rel="noopener">Watch on Twitch ↗</a>
+        <span class="badge badge-live"><span class="dot"></span>Live</span>
+        {drops_html}
+      </div>
+    </article>"""
+
+
+def render_section(title, row_htmls, kind, empty_text):
+    if not row_htmls:
         body = f'<p class="empty">{e(empty_text)}</p>'
     else:
-        body = "".join(render_match_row(m, kind) for m in matches)
+        body = "".join(row_htmls)
     return f"""
     <section class="section-{kind}">
       <h2>{e(title)}</h2>
@@ -133,7 +164,11 @@ def render_section(title, matches, kind, empty_text):
     </section>"""
 
 
-def build_html(live, upcoming, completed, generated_at):
+def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadcasts=None, drops_channels=None):
+    twitch_info = twitch_info or {}
+    broadcasts = broadcasts or []
+    drops_channels = drops_channels or set()
+
     live_sorted = sorted(live, key=lambda m: m["timestamp"])
     upcoming_sorted = sorted(upcoming, key=lambda m: m["timestamp"])
     completed_sorted = sorted(completed, key=lambda m: m["timestamp"], reverse=True)
@@ -143,12 +178,22 @@ def build_html(live, upcoming, completed, generated_at):
     today_matches = [m for m in upcoming_sorted if datetime.fromtimestamp(m["timestamp"], tz=timezone.utc).astimezone(LOCAL_TZ).date() == today]
     later_matches = [m for m in upcoming_sorted if m not in today_matches]
 
-    if live_sorted:
-        sections += render_section("Live now", live_sorted, "live", "")
-    if today_matches:
-        sections += render_section("Upcoming today", today_matches, "upcoming", "")
-    sections += render_section(f"Upcoming (next {int(UPCOMING_WINDOW_DAYS)} days)", later_matches, "upcoming", "No further matches scheduled in this window.")
-    sections += render_section(f"Recent results (last {int(RESULTS_WINDOW_DAYS)} days)", completed_sorted, "completed", "No recent results.")
+    def has_drops(match):
+        channel = (match.get("twitch_channel") or "").lower()
+        return channel in drops_channels
+
+    live_rows = [render_match_row(m, "live", drops=has_drops(m)) for m in live_sorted]
+    live_rows += [render_broadcast_row(b) for b in broadcasts]
+    today_rows = [render_match_row(m, "upcoming", drops=has_drops(m)) for m in today_matches]
+    later_rows = [render_match_row(m, "upcoming", drops=has_drops(m)) for m in later_matches]
+    completed_rows = [render_match_row(m, "completed") for m in completed_sorted]
+
+    if live_rows:
+        sections += render_section("Live now", live_rows, "live", "")
+    if today_rows:
+        sections += render_section("Upcoming today", today_rows, "upcoming", "")
+    sections += render_section(f"Upcoming (next {int(UPCOMING_WINDOW_DAYS)} days)", later_rows, "upcoming", "No further matches scheduled in this window.")
+    sections += render_section(f"Recent results (last {int(RESULTS_WINDOW_DAYS)} days)", completed_rows, "completed", "No recent results.")
 
     generated_str = generated_at.astimezone(LOCAL_TZ).strftime("%a %d %b %Y, %H:%M (Paris time)")
 
@@ -258,6 +303,12 @@ section {{ margin-bottom: 2.25rem; }}
 @media (prefers-reduced-motion: reduce) {{ .badge-live .dot {{ animation: none; }} }}
 @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.35; }} }}
 .badge-done {{ background: var(--bg-wash); color: var(--text-dim); border: 1px solid var(--border); }}
+.badge-drops {{ background: var(--accent); color: var(--accent-ink); }}
+.ticket-row-broadcast {{ display: block; }}
+.broadcast-title {{
+  font: 700 0.98rem/1.3 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font-stretch: condensed; letter-spacing: 0.01em;
+}}
 .empty {{
   color: var(--text-dim); font-size: 0.88rem; padding: 1rem; border: 1px dashed var(--border);
   border-radius: 4px; background: var(--bg-wash);
@@ -291,15 +342,40 @@ def build_and_commit():
     log.info("building site")
     ensure_repo()
 
-    matches, _ = sources.gather_all_matches()
+    matches, ubi_live_channels = sources.gather_all_matches()
     now = time.time()
     live, upcoming, completed = sources.split_by_status(matches, now=now)
 
     upcoming = [m for m in upcoming if m["timestamp"] <= now + UPCOMING_WINDOW_DAYS * 86400]
     completed = [m for m in completed if m["timestamp"] >= now - RESULTS_WINDOW_DAYS * 86400]
 
+    drops_channels = set()
+    try:
+        _, drops_channels = sources.fetch_active_drops()
+    except Exception:
+        log.exception("twitch drops fetch failed")
+
+    twitch_info, broadcasts = {}, []
+    if TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET:
+        channels_to_check = set(TWITCH_CHANNELS) | set(ubi_live_channels)
+        channels_to_check.update(m["twitch_channel"].lower() for m in matches if m.get("twitch_channel"))
+        try:
+            twitch_info = sources.fetch_twitch_live_info(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, channels_to_check)
+        except Exception:
+            log.exception("twitch live info fetch failed")
+
+        matched_channels = {m["twitch_channel"].lower() for m in live if m.get("twitch_channel")}
+        broadcasts = [
+            {"channel": channel, "has_drops": channel in drops_channels, **info}
+            for channel, info in twitch_info.items()
+            if channel not in matched_channels
+        ]
+
     generated_at = datetime.now(tz=timezone.utc)
-    page = build_html(live, upcoming, completed, generated_at)
+    page = build_html(
+        live, upcoming, completed, generated_at,
+        twitch_info=twitch_info, broadcasts=broadcasts, drops_channels=drops_channels,
+    )
 
     docs_dir = os.path.join(CLONE_DIR, DOCS_SUBDIR)
     os.makedirs(docs_dir, exist_ok=True)

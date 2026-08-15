@@ -52,42 +52,16 @@ def send_discord(content):
     resp.raise_for_status()
 
 
-def get_twitch_token():
-    resp = requests.post(
-        "https://id.twitch.tv/oauth2/token",
-        data={
-            "client_id": TWITCH_CLIENT_ID,
-            "client_secret": TWITCH_CLIENT_SECRET,
-            "grant_type": "client_credentials",
-        },
-        timeout=15,
-    )
-    resp.raise_for_status()
-    return resp.json()["access_token"]
-
-
-def get_live_channels(token, channels):
-    if not channels:
-        return {}
-    headers = {"Client-Id": TWITCH_CLIENT_ID, "Authorization": f"Bearer {token}"}
-    params = [("user_login", c) for c in channels]
-    resp = requests.get("https://api.twitch.tv/helix/streams", headers=headers, params=params, timeout=15)
-    resp.raise_for_status()
-    live = {}
-    for stream in resp.json().get("data", []):
-        login = stream["user_login"].lower()
-        live[login] = {
-            "title": stream.get("title", ""),
-            "game": stream.get("game_name", ""),
-            "viewers": stream.get("viewer_count", 0),
-        }
-    return live
-
-
 def check_twitch_live(state, extra_channels=None):
     channels = list(dict.fromkeys(TWITCH_CHANNELS + (extra_channels or [])))  # de-duplicate, keep order
-    token = get_twitch_token()
-    live_now = get_live_channels(token, channels)
+    live_now = sources.fetch_twitch_live_info(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, channels)
+
+    drops_channels = set()
+    try:
+        _, drops_channels = sources.fetch_active_drops()
+    except Exception:
+        log.exception("twitch drops fetch failed")
+
     previously_live = state.get("live_channels", {})
 
     messages = []
@@ -99,6 +73,7 @@ def check_twitch_live(state, extra_channels=None):
             messages.append(
                 f"🔴 **twitch.tv/{channel}** just went live\n"
                 f"{info['title']}" + (f" — playing *{info['game']}*" if info["game"] else "") +
+                ("\n🎁 Drops enabled" if channel in drops_channels else "") +
                 f"\nhttps://www.twitch.tv/{channel}"
             )
         previously_live[channel] = is_live

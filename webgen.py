@@ -311,13 +311,13 @@ section {{ margin-bottom: 2.25rem; }}
 .section-completed .ticket-list {{ grid-template-columns: 1fr; }}
 .ticket {{
   background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--border);
-  border-radius: 4px; padding: 0.85rem 1rem;
+  border-radius: 4px; padding: 0.85rem 1rem; position: relative;
 }}
-.ticket-live {{ border-left-color: var(--live); }}
+.ticket-live {{ border-left-color: var(--live); padding-top: 2.1rem; }}
 .ticket-completed {{ opacity: 0.88; }}
 .ticket-row {{ display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.6rem; }}
 .team {{
-  font: 700 0.98rem/1.25 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font: 700 1.15rem/1.25 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
   font-stretch: condensed; letter-spacing: 0.01em;
 }}
 a.team {{ color: inherit; text-decoration: none; }}
@@ -327,7 +327,7 @@ a.team:hover {{ color: var(--accent); text-decoration: underline; }}
 .vs {{ color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }}
 .score {{
   display: flex; align-items: baseline; gap: 0.3rem; justify-content: center;
-  font: 700 1.05rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  font: 700 1.2rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
   font-variant-numeric: tabular-nums;
 }}
 .score .dash {{ color: var(--text-dim); font-weight: 400; }}
@@ -346,7 +346,10 @@ a.team:hover {{ color: var(--accent); text-decoration: underline; }}
   font: 700 0.68rem/1 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.06em;
   padding: 0.25rem 0.55rem; border-radius: 999px;
 }}
-.badge-live {{ background: var(--live); color: #fff; }}
+.badge-live {{
+  background: var(--live); color: #fff;
+  position: absolute; top: 0.7rem; right: 0.85rem; margin-left: 0;
+}}
 .badge-live .dot {{
   width: 6px; height: 6px; border-radius: 50%; background: #fff;
   animation: pulse 1.6s ease-in-out infinite;

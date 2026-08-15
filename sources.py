@@ -173,6 +173,24 @@ def _extract_teams(match_div):
     ]
 
 
+def build_team_links(html):
+    """Team name -> Liquipedia roster page URL, built from every team link
+    on the page (broader than any single match, so a team seen once gets
+    linked everywhere it appears - Ubisoft-sourced matches included, since
+    they carry no such link of their own)."""
+    soup = BeautifulSoup(html, "html.parser")
+    links = {}
+    for a in soup.select(".match-info-header-opponent .name a"):
+        raw_title = a.get("title", a.get_text(strip=True))
+        if "(page does not exist)" in raw_title:
+            continue  # red link - no real roster page to send people to
+        name = re.sub(r"\s*\(page does not exist\)$", "", raw_title)
+        href = a.get("href")
+        if href and name not in links:
+            links[name] = "https://liquipedia.net" + href
+    return links
+
+
 def _extract_tournament(match_div):
     el = match_div.select_one(".match-info-tournament-name a")
     return el.get_text(strip=True) if el else "Unknown tournament"
@@ -266,7 +284,7 @@ def _merge(primary, secondary, drop_tbd=True):
 
 
 def gather_all_matches():
-    """Fetch + merge both sources. Returns (all_matches, ubisoft_live_channels)."""
+    """Fetch + merge both sources. Returns (all_matches, ubisoft_live_channels, team_links)."""
     ubi_matches, ubi_live_channels = [], []
     try:
         ubi_matches, ubi_live_channels = fetch_ubisoft_matches()
@@ -274,14 +292,16 @@ def gather_all_matches():
         log.exception("ubisoft fetch failed")
 
     lp_matches = []
+    team_links = {}
     try:
         html = fetch_liquipedia_html()
         lp_matches = parse_liquipedia_matches(html)
+        team_links = build_team_links(html)
     except Exception:
         log.exception("liquipedia fetch failed")
 
     combined = _merge(ubi_matches, lp_matches)
-    return combined, ubi_live_channels
+    return combined, ubi_live_channels, team_links
 
 
 def split_by_status(matches, now=None):

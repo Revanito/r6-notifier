@@ -52,15 +52,9 @@ def send_discord(content):
     resp.raise_for_status()
 
 
-def check_twitch_live(state, extra_channels=None):
+def check_twitch_live(state, drops_channels, extra_channels=None):
     channels = list(dict.fromkeys(TWITCH_CHANNELS + (extra_channels or [])))  # de-duplicate, keep order
     live_now = sources.fetch_twitch_live_info(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, channels)
-
-    drops_channels = set()
-    try:
-        _, drops_channels = sources.fetch_active_drops()
-    except Exception:
-        log.exception("twitch drops fetch failed")
 
     previously_live = state.get("live_channels", {})
 
@@ -82,10 +76,11 @@ def check_twitch_live(state, extra_channels=None):
     return messages
 
 
-def check_upcoming_matches(state, matches):
+def check_upcoming_matches(state, matches, drops_channels):
     now = time.time()
     horizon = now + LOOKAHEAD_HOURS * 3600
     notified = state.setdefault("notified_matches", {})
+    default_channel = TWITCH_CHANNELS[0] if TWITCH_CHANNELS else None
 
     messages = []
     for match in sorted(matches, key=lambda m: m["timestamp"]):
@@ -97,8 +92,13 @@ def check_upcoming_matches(state, matches):
         local_dt = datetime.fromtimestamp(match["timestamp"], tz=timezone.utc).astimezone(LOCAL_TZ)
         when = local_dt.strftime("%a %d %b, %H:%M") + " (Paris time)"
         line = f"🎮 **{match['teams'][0]} vs {match['teams'][1]}** — {match['tournament']}\n🗓️ {when}"
-        if match["twitch_channel"]:
-            line += f"\n📺 https://www.twitch.tv/{match['twitch_channel']}"
+
+        channel = match["twitch_channel"] or default_channel
+        if channel:
+            line += f"\n📺 https://www.twitch.tv/{channel}"
+            if channel.lower() in drops_channels:
+                line += "\n🎁 Drops enabled"
+
         messages.append(line)
         notified[match["key"]] = now
 
@@ -111,15 +111,21 @@ def run_check():
     state = load_state()
     all_messages = []
 
-    matches, ubi_live_channels = sources.gather_all_matches()
+    matches, ubi_live_channels, _team_links = sources.gather_all_matches()
+
+    drops_channels = set()
+    try:
+        _, drops_channels = sources.fetch_active_drops()
+    except Exception:
+        log.exception("twitch drops fetch failed")
 
     try:
-        all_messages.extend(check_twitch_live(state, extra_channels=ubi_live_channels))
+        all_messages.extend(check_twitch_live(state, drops_channels, extra_channels=ubi_live_channels))
     except Exception:
         log.exception("twitch live check failed")
 
     try:
-        all_messages.extend(check_upcoming_matches(state, matches))
+        all_messages.extend(check_upcoming_matches(state, matches, drops_channels))
     except Exception:
         log.exception("schedule check failed")
 

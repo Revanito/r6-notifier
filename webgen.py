@@ -87,7 +87,15 @@ def e(text):
     return html.escape(str(text))
 
 
-def render_match_row(match, kind, drops=False):
+def render_team(name, side_class, team_links):
+    url = team_links.get(name)
+    if url:
+        return f'<a class="team {side_class}" href="{e(url)}" target="_blank" rel="noopener">{e(name)}</a>'
+    return f'<span class="team {side_class}">{e(name)}</span>'
+
+
+def render_match_row(match, kind, drops=False, team_links=None):
+    team_links = team_links or {}
     teams = match["teams"]
     when = fmt_dt(match["timestamp"])
     score_html = ""
@@ -117,9 +125,9 @@ def render_match_row(match, kind, drops=False):
     return f"""
     <article class="ticket ticket-{kind}">
       <div class="ticket-row">
-        <span class="team team-a">{e(teams[0])}</span>
+        {render_team(teams[0], "team-a", team_links)}
         {score_html}
-        <span class="team team-b">{e(teams[1])}</span>
+        {render_team(teams[1], "team-b", team_links)}
       </div>
       <div class="ticket-meta">
         <span class="tournament">{e(match["tournament"])}</span>
@@ -164,10 +172,11 @@ def render_section(title, row_htmls, kind, empty_text):
     </section>"""
 
 
-def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadcasts=None, drops_channels=None):
+def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadcasts=None, drops_channels=None, team_links=None):
     twitch_info = twitch_info or {}
     broadcasts = broadcasts or []
     drops_channels = drops_channels or set()
+    team_links = team_links or {}
 
     live_sorted = sorted(live, key=lambda m: m["timestamp"])
     upcoming_sorted = sorted(upcoming, key=lambda m: m["timestamp"])
@@ -182,11 +191,27 @@ def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadc
         channel = (match.get("twitch_channel") or "").lower()
         return channel in drops_channels
 
-    live_rows = [render_match_row(m, "live", drops=has_drops(m)) for m in live_sorted]
+    default_channel = TWITCH_CHANNELS[0] if TWITCH_CHANNELS else None
+
+    def with_fallback_channel(match):
+        # Liquipedia is our only source for a match's specific channel, but
+        # it drops a match's countdown timer entirely once it goes truly
+        # live (different DOM), so a live match can lose its only channel
+        # source right when it matters most. Fall back to the main watched
+        # channel rather than show nothing.
+        if match.get("twitch_channel"):
+            return match
+        return {**match, "twitch_channel": default_channel}
+
+    live_sorted = [with_fallback_channel(m) for m in live_sorted]
+    today_matches = [with_fallback_channel(m) for m in today_matches]
+    later_matches = [with_fallback_channel(m) for m in later_matches]
+
+    live_rows = [render_match_row(m, "live", drops=has_drops(m), team_links=team_links) for m in live_sorted]
     live_rows += [render_broadcast_row(b) for b in broadcasts]
-    today_rows = [render_match_row(m, "upcoming", drops=has_drops(m)) for m in today_matches]
-    later_rows = [render_match_row(m, "upcoming", drops=has_drops(m)) for m in later_matches]
-    completed_rows = [render_match_row(m, "completed") for m in completed_sorted]
+    today_rows = [render_match_row(m, "upcoming", drops=has_drops(m), team_links=team_links) for m in today_matches]
+    later_rows = [render_match_row(m, "upcoming", drops=has_drops(m), team_links=team_links) for m in later_matches]
+    completed_rows = [render_match_row(m, "completed", team_links=team_links) for m in completed_sorted]
 
     if live_rows:
         sections += render_section("Live now", live_rows, "live", "")
@@ -271,6 +296,8 @@ section {{ margin-bottom: 2.25rem; }}
   font: 700 0.98rem/1.25 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
   font-stretch: condensed; letter-spacing: 0.01em;
 }}
+a.team {{ color: inherit; text-decoration: none; }}
+a.team:hover {{ color: var(--accent); text-decoration: underline; }}
 .team-a {{ text-align: right; }}
 .team-b {{ text-align: left; }}
 .vs {{ color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }}
@@ -342,7 +369,7 @@ def build_and_commit():
     log.info("building site")
     ensure_repo()
 
-    matches, ubi_live_channels = sources.gather_all_matches()
+    matches, ubi_live_channels, team_links = sources.gather_all_matches()
     now = time.time()
     live, upcoming, completed = sources.split_by_status(matches, now=now)
 
@@ -374,7 +401,7 @@ def build_and_commit():
     generated_at = datetime.now(tz=timezone.utc)
     page = build_html(
         live, upcoming, completed, generated_at,
-        twitch_info=twitch_info, broadcasts=broadcasts, drops_channels=drops_channels,
+        twitch_info=twitch_info, broadcasts=broadcasts, drops_channels=drops_channels, team_links=team_links,
     )
 
     docs_dir = os.path.join(CLONE_DIR, DOCS_SUBDIR)

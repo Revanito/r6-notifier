@@ -1,0 +1,18 @@
+services:
+  r6-notifier:
+    build: .
+    container_name: r6-notifier
+    restart: unless-stopped
+    command: python main.py
+    env_file: .env
+    volumes:
+      - ./data:/data
+
+  r6-site:
+    build: .
+    container_name: r6-site
+    restart: unless-stopped
+    command: python webgen.py
+    env_file: .env
+    volumes:
+      - ./site-repo:/repo

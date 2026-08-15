@@ -17,6 +17,7 @@ Two small Docker services that track Rainbow Six Siege esports from public data,
 Two sources, merged:
 - **Ubisoft's official esports page** — authoritative (has a real `live` flag and final scores), but only covers whatever event Ubisoft is currently spotlighting on that page.
 - **[Liquipedia](https://liquipedia.net/rainbowsix/Liquipedia:Matches)** — much broader coverage (every tracked tournament), but occasionally lags on team reveals for not-yet-started bracket slots, and its "is this live" signal isn't trustworthy on its own.
+- **https://twitchdrops.app/game/tom-clancys-rainbow-six-siege** - Live campaigns for drops, for extracting the drop data.
 
 Because of that, Ubisoft's feed wins on overlap and is the *only* source trusted for "live right now"; Liquipedia fills in everything Ubisoft's narrow feed doesn't cover. Matches are de-duplicated by timestamp, and `TBD vs TBD` placeholder slots from Liquipedia are dropped in favor of Ubisoft's resolved data when available.
 

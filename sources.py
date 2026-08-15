@@ -51,8 +51,12 @@ def fetch_ubisoft_matches():
         is_live = bool(match.get("live"))
         scores = match.get("scores") or {}
         score = (scores.get("team1", 0), scores.get("team2", 0))
-        has_score = score != (0, 0) or any(g for g in match.get("gameScores", []))
-        finished = (not is_live) and has_score
+        # NB: Ubisoft pre-populates "gameScores" with zeroed placeholder
+        # entries for every possible map before a match even starts (e.g. 5
+        # empty slots for a Bo5), so those can't be used as a "has a score"
+        # signal - only the top-level series score and a past start time can.
+        has_score = score != (0, 0)
+        finished = (not is_live) and has_score and ts <= time.time()
 
         matches.append({
             "timestamp": ts,

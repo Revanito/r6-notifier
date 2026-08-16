@@ -252,6 +252,7 @@ def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadc
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>R6 Ops Board</title>
+<link rel="icon" type="image/png" href="favicon.png">
 <style>
 :root {{
   --bg: #eef0f2;

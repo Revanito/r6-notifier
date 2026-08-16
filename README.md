@@ -21,7 +21,7 @@ Rebuild frequency adapts automatically: every `SITE_BUILD_INTERVAL_MINUTES` (10)
 - **Ubisoft's official esports page** — authoritative (has a real `live` flag and final scores), but only covers whatever event Ubisoft is currently spotlighting on that page.
 - **[Liquipedia](https://liquipedia.net/rainbowsix/Liquipedia:Matches)** — much broader coverage (every tracked tournament), but occasionally lags on team reveals for not-yet-started bracket slots, and its "is this live" signal isn't trustworthy on its own.
 - **[siege.gg](https://siege.gg/matches)** — team country flags, org logos, per-map result score, a link to each match's recap page, and (via its per-competition and per-match APIs) the playoff bracket and tournament info sidebar.
-- **https://twitchdrops.app/game/tom-clancys-rainbow-six-siege** - Live campaigns for drops, for extracting the drop data.
+- **[twitchdrops.app](https://twitchdrops.app/game/tom-clancys-rainbow-six-siege)** - Live campaigns for drops, for extracting the drop data.
 
 Ubisoft's feed wins on overlap and is the *only* source trusted for "live right now"; Liquipedia fills in everything Ubisoft's narrow feed doesn't cover; siege.gg enriches whatever's left with flags/logos/links regardless of which of the first two supplied the match. Matches are de-duplicated by timestamp, and `TBD vs TBD` placeholder slots from Liquipedia are dropped in favor of Ubisoft's resolved data when available.
 

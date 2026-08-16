@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import time
+from datetime import datetime
 from urllib.parse import unquote
 
 import requests
@@ -26,6 +27,11 @@ NEXT_DATA_RE = re.compile(r'<script id="__NEXT_DATA__" type="application/json">(
 
 DROPS_URL = "https://twitchdrops.app/game/tom-clancys-rainbow-six-siege"
 DROPS_CHANNEL_RE = re.compile(r"twitch\.tv/([^/?#\"]+)", re.I)
+
+SIEGE_GG_BASE = "https://siege.gg"
+SIEGE_GG_API = "https://siege.gg/api/stats/matches"
+NUXT_DATA_RE = re.compile(r'<script type="application/json"[^>]*id="__NUXT_DATA__"[^>]*>(.*?)</script>', re.S)
+TEAM_NAME_SUFFIXES = ("esports", "esport", "gaming", "clan", "team", "gg")
 
 MATCH_DEDUP_BUCKET_SECONDS = 300  # matches within this window are treated as the same match across sources
 
@@ -111,6 +117,289 @@ def fetch_active_drops():
                 active_channels.add(m.group(1).lower())
 
     return rewards, active_channels
+
+
+def _normalize_team_name(name):
+    """Loose key for matching the same team across sources that spell its
+    name slightly differently ("DarkZero" on Liquipedia vs "DarkZero
+    Esports" on siege.gg)."""
+    key = re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+    for suffix in TEAM_NAME_SUFFIXES:
+        if key.endswith(suffix) and len(key) > len(suffix) + 2:
+            key = key[: -len(suffix)]
+    return key
+
+
+def _siege_gg_winner_index(rosters, winner_id, score):
+    """winner_id straight from the API when present; siege.gg has been seen
+    to leave it null on an otherwise-decided match (e.g. round score tied
+    17-17 but maps_won 2-1), so fall back to comparing the map score."""
+    if winner_id:
+        for i, r in enumerate(rosters[:2]):
+            if r.get("id") == winner_id:
+                return i
+    if score and score[0] != score[1]:
+        return 0 if score[0] > score[1] else 1
+    return None
+
+
+def fetch_siege_gg_matches(cutoff_ts, max_pages=5):
+    """siege.gg's public JSON API backing /matches. Each page response
+    carries the *entire* "upcoming" list plus one page of the "results"
+    list (paginated, newest first, ~9-10 days per page) - the "tab" query
+    param turns out to only affect the frontend's own display, not what the
+    API returns, so a single set of page fetches covers both. Paginates
+    backwards through results until older than cutoff_ts. Used for: per-team
+    country flags and logos (Ubisoft/Liquipedia expose neither), the
+    siege.gg match-page link, the per-map score (maps_won_a/b, e.g. "1-3")
+    as the authoritative result, and each match's competition_id (used to
+    look up its playoff bracket)."""
+    seen_ids = set()
+    matches = []
+
+    def _add(m):
+        if m.get("id") in seen_ids:
+            return
+        seen_ids.add(m.get("id"))
+        rosters = m.get("rosters") or []
+        if len(rosters) < 2:
+            return
+        score = (m["maps_won_a"], m["maps_won_b"]) if m.get("has_results") else None
+        ts = datetime.fromisoformat(m["date"].replace("Z", "+00:00")).timestamp() if m.get("date") else None
+        matches.append({
+            "timestamp": ts,
+            "teams": [r.get("name") for r in rosters[:2]],
+            "flags": [r.get("flag") for r in rosters[:2]],
+            "logos": [r.get("logo_url") for r in rosters[:2]],
+            "score": score,
+            "winner_index": _siege_gg_winner_index(rosters, m.get("winner_id"), score),
+            "result_url": (SIEGE_GG_BASE + m["web_url"]) if m.get("web_url") else None,
+            "competition_id": m.get("competition_id"),
+            "competition_name": m.get("competition_full_name") or m.get("competition_name"),
+        })
+
+    page = 1
+    while page <= max_pages:
+        resp = requests.get(
+            SIEGE_GG_API,
+            params={"page": page, "tab": "results"},
+            headers={"User-Agent": UBISOFT_UA, "Accept": "application/json"},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+
+        for m in payload.get("upcoming", {}).get("data") or []:
+            _add(m)
+
+        results = payload.get("results", {})
+        data = results.get("data") or []
+        if not data:
+            break
+
+        reached_cutoff = False
+        for m in data:
+            ts = datetime.fromisoformat(m["date"].replace("Z", "+00:00")).timestamp()
+            if ts < cutoff_ts:
+                reached_cutoff = True
+                continue
+            _add(m)
+
+        if reached_cutoff or not results.get("next_page_url"):
+            break
+        page += 1
+
+    return matches
+
+
+def build_siege_gg_data(lookback_days=16):
+    """Returns (flag_map, logo_map, by_pair):
+    - flag_map / logo_map: {normalized_team_name: image_url}
+    - by_pair: {frozenset(normalized_team_names): [siege_gg_match, ...]}
+    """
+    siege_matches = fetch_siege_gg_matches(cutoff_ts=time.time() - lookback_days * 86400)
+
+    flag_map = {}
+    logo_map = {}
+    by_pair = {}
+    for sm in siege_matches:
+        for team, flag, logo in zip(sm["teams"], sm["flags"], sm["logos"]):
+            if not team:
+                continue
+            key = _normalize_team_name(team)
+            if flag:
+                flag_map.setdefault(key, flag)
+            if logo:
+                logo_map.setdefault(key, logo)
+        key = frozenset(_normalize_team_name(t) for t in sm["teams"])
+        by_pair.setdefault(key, []).append(sm)
+
+    return flag_map, logo_map, by_pair
+
+
+def attach_siege_gg_data(matches, flag_map, logo_map, by_pair):
+    """Enriches already-merged matches in place with flags/logos for both
+    teams and, where a matching siege.gg match exists (paired by team
+    names, sanity-checked by timestamp proximity since siege.gg's kickoff
+    time can differ from Ubisoft/Liquipedia's by a few minutes), the
+    result-page link, authoritative per-map score, and competition_id."""
+    for m in matches:
+        m["flags"] = [flag_map.get(_normalize_team_name(t)) for t in m["teams"]]
+        m["logos"] = [logo_map.get(_normalize_team_name(t)) for t in m["teams"]]
+
+        key = frozenset(_normalize_team_name(t) for t in m["teams"])
+        candidates = by_pair.get(key)
+        if not candidates:
+            continue
+        sm = min(candidates, key=lambda c: abs((c["timestamp"] or 0) - m["timestamp"]))
+        if sm["timestamp"] is None or abs(sm["timestamp"] - m["timestamp"]) > 6 * 3600:
+            continue
+        m["result_url"] = sm.get("result_url")
+        m["competition_id"] = sm.get("competition_id")
+        m["competition_name"] = sm.get("competition_name")
+        if sm.get("score") and (m.get("finished") or m.get("live")):
+            m["score"] = sm["score"]
+            if sm.get("winner_index") is not None:
+                m["winner_index"] = sm["winner_index"]
+    return matches
+
+
+def fetch_competition_bracket(competition_id):
+    """Playoff-only matches for one competition, from siege.gg's
+    per-competition matches API (the same one its /competitions/<id> page
+    uses to render the bracket)."""
+    resp = requests.get(
+        f"{SIEGE_GG_BASE}/api/stats/competitions/{competition_id}/matches",
+        headers={"User-Agent": UBISOFT_UA, "Accept": "application/json"},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    payload = resp.json()
+    all_matches = (payload.get("results") or []) + (payload.get("upcoming") or [])
+
+    bracket = []
+    for m in all_matches:
+        if not m.get("playoff"):
+            continue
+        rosters = m.get("rosters") or []
+        score = (m["maps_won_a"], m["maps_won_b"]) if m.get("has_results") else None
+        ts = datetime.fromisoformat(m["date"].replace("Z", "+00:00")).timestamp() if m.get("date") else None
+        bracket.append({
+            "teams": [r.get("name") for r in rosters[:2]],
+            "flags": [r.get("flag") for r in rosters[:2]],
+            "logos": [r.get("logo_url") for r in rosters[:2]],
+            "score": score,
+            "winner_index": _siege_gg_winner_index(rosters, m.get("winner_id"), score),
+            "round": m.get("round") or "TBD",
+            "sequence": m.get("sequence") or 0,
+            "timestamp": ts,
+            "result_url": (SIEGE_GG_BASE + m["web_url"]) if m.get("web_url") else None,
+        })
+    return bracket
+
+
+def _devalue_resolve(raw, idx, depth=0):
+    """Nuxt's SSR payload (__NUXT_DATA__) is a flat array where objects
+    reference each other by index (devalue format) instead of nesting
+    inline. Walks those references back into a normal dict/list."""
+    if depth > 25:
+        return None
+    v = raw[idx]
+    if isinstance(v, list):
+        if len(v) == 2 and isinstance(v[0], str) and v[0] in ("ShallowReactive", "Reactive", "Ref"):
+            return _devalue_resolve(raw, v[1], depth + 1)
+        return [_devalue_resolve(raw, x, depth + 1) if isinstance(x, int) else x for x in v]
+    if isinstance(v, dict):
+        return {k: (_devalue_resolve(raw, x, depth + 1) if isinstance(x, int) else x) for k, x in v.items()}
+    return v
+
+
+def fetch_competition_info(competition_id):
+    """Competition-level info (prize pool, region, venue, participating
+    teams, ...) scraped from a competition's siege.gg page - there's no
+    JSON API for this, only what's embedded in the page's Nuxt payload.
+    /competitions/<id> redirects to the full slugged URL regardless of
+    slug, so the numeric id alone is enough."""
+    resp = requests.get(
+        f"{SIEGE_GG_BASE}/competitions/{competition_id}",
+        headers={"User-Agent": UBISOFT_UA},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    m = NUXT_DATA_RE.search(resp.text)
+    if not m:
+        return None
+    raw = json.loads(m.group(1))
+
+    info = None
+    for idx, item in enumerate(raw):
+        if isinstance(item, dict) and "prizepool" in item and "stats" in item:
+            info = _devalue_resolve(raw, idx)
+            break
+    if not info:
+        return None
+
+    teams = (info.get("stats") or {}).get("involved_teams") or []
+    return {
+        "name": info.get("name"),
+        "logo_url": info.get("logo_url"),
+        "date": info.get("date"),
+        "type": "Online" if info.get("online") else "LAN",
+        "region": info.get("region"),
+        "prizepool": info.get("prizepool"),
+        "location": info.get("full_location"),
+        "venue": info.get("venue"),
+        "flag": info.get("flag"),
+        "web_url": (SIEGE_GG_BASE + info["web_url"]) if info.get("web_url") else f"{SIEGE_GG_BASE}/competitions/{competition_id}",
+        "teams": [
+            {
+                "name": t.get("name"),
+                "logo_url": t.get("logo_url"),
+                "flag": t.get("flag"),
+                "web_url": (SIEGE_GG_BASE + t["web_url"]) if t.get("web_url") else None,
+            }
+            for t in teams
+        ],
+    }
+
+
+def fetch_active_competition_info(matches, now=None):
+    """Sidebar data for whichever tournament fetch_active_bracket would
+    also be showing, or None if none of the given matches carry a
+    competition_id."""
+    comp_id, _ = pick_active_competition(matches, now=now)
+    if not comp_id:
+        return None
+    return fetch_competition_info(comp_id)
+
+
+def pick_active_competition(matches, now=None):
+    """Which tournament's bracket is most relevant right now: a live
+    match's competition wins outright; otherwise whichever competition has
+    a match closest in time to now (soonest upcoming, or most recent
+    result if nothing's scheduled)."""
+    now = now if now is not None else time.time()
+    candidates = [m for m in matches if m.get("competition_id") and m.get("timestamp")]
+    if not candidates:
+        return None, None
+    live = [m for m in candidates if m.get("live")]
+    pool = live or candidates
+    best = min(pool, key=lambda m: abs(m["timestamp"] - now))
+    return best["competition_id"], best.get("competition_name") or best.get("tournament")
+
+
+def fetch_active_bracket(matches, now=None):
+    """Playoff bracket for whichever tournament is currently most relevant
+    among the given (already status/window-filtered) matches, or ([], None)
+    if none of them carry a competition_id or that competition has no
+    playoff-stage matches yet."""
+    comp_id, comp_name = pick_active_competition(matches, now=now)
+    if not comp_id:
+        return [], None
+    bracket = fetch_competition_bracket(comp_id)
+    if not bracket:
+        return [], None
+    return bracket, comp_name
 
 
 def _make_key(ts, teams):
@@ -305,6 +594,13 @@ def gather_all_matches():
         log.exception("liquipedia fetch failed")
 
     combined = _merge(ubi_matches, lp_matches)
+
+    try:
+        flag_map, logo_map, results_by_pair = build_siege_gg_data()
+        combined = attach_siege_gg_data(combined, flag_map, logo_map, results_by_pair)
+    except Exception:
+        log.exception("siege.gg fetch failed")
+
     return combined, ubi_live_channels, team_links
 
 

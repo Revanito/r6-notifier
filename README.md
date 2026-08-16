@@ -10,7 +10,9 @@ Two small Docker services that track Rainbow Six Siege esports from public data,
 - when a watched Twitch channel (default `rainbow6`) goes live
 - upcoming matches in the next ~30 hours (teams, tournament, time, Twitch link)
 
-**`r6-site`** — regenerates a static results/schedule page and pushes it to `docs/` on this repo's `main` branch, only when the rendered page actually changed. GitHub Pages serves that folder. Sections: Live now, Active drops, Upcoming today, Upcoming (next 30 days), Playoff bracket (while one's relevant), Recent results (last 14 days) - plus a right-hand sidebar with the current tournament's info and participating teams.
+**`r6-site`** — regenerates a static results/schedule page and pushes it to `docs/` on this repo's `main` branch, only when the rendered page actually changed. GitHub Pages serves that folder.
+
+Sections: Live now, Active drops, Upcoming today, Upcoming (next 30 days), Playoff bracket (while one's relevant), Recent results (last 14 days). Every match card shows both teams' country flags and org logos; a finished match's winning map score gets a green highlight and a link to its siege.gg recap page. While a tournament has a match live, upcoming soon, or recently finished, a right-hand sidebar appears with that tournament's banner, prize pool/region/venue info, and the full participating-teams list - it fades away on its own once nothing's close enough in time to be "the" relevant event, no manual toggling needed.
 
 Rebuild frequency adapts automatically: every `SITE_BUILD_INTERVAL_MINUTES` (10) while a match is live or one's scheduled to start within `ACTIVE_LOOKAHEAD_HOURS` (48h), otherwise every `SITE_IDLE_BUILD_INTERVAL_MINUTES` (24h) - so quiet stretches between tournaments don't spam commits or Pages rebuilds for a page that isn't changing anyway.
 
@@ -39,3 +41,5 @@ That starts both services. State (which matches/live-transitions were already no
 - `main.py` is the Discord notifier; `webgen.py` is the site generator — deliberately not named `site.py`, since that shadows Python's built-in `site` module.
 - `sources.py` holds all the fetch/merge/classify logic shared by both.
 - Set `RUN_ON_START=true` in `.env` to make either service run once immediately on startup instead of waiting for its first scheduled slot — useful when testing.
+- siege.gg's match data comes from its public JSON API (`/api/stats/matches`, `/api/stats/competitions/<id>/matches`). Its per-competition info (prize pool, region, venue, participating teams) has no API - it's scraped out of the competition page's embedded Nuxt payload instead, so that part is more likely to break if siege.gg changes their frontend.
+- Team names aren't always spelled identically across sources (e.g. "DarkZero" vs "DarkZero Esports"), so flags/logos/results are matched by a normalized team name, not an exact string match.

@@ -16,20 +16,21 @@
   --accent: #d9600a;
   --accent-ink: #ffffff;
   --live: #d0271f;
-  --win: #12151a;
   --lose: #a7adb6;
+  --win-box: #1a9c53;
+  --win-ink: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0d0f12; --bg-wash: #15181c; --card: #15181c; --text: #eceef0;
     --text-dim: #838d97; --border: #262b31; --accent: #ff8c3a; --accent-ink: #16110a;
-    --live: #ff453a; --win: #ffffff; --lose: #5c636b;
+    --live: #ff453a; --lose: #5c636b; --win-box: #2fd673; --win-ink: #0a1f12;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0d0f12; --bg-wash: #15181c; --card: #15181c; --text: #eceef0;
   --text-dim: #838d97; --border: #262b31; --accent: #ff8c3a; --accent-ink: #16110a;
-  --live: #ff453a; --win: #ffffff; --lose: #5c636b;
+  --live: #ff453a; --lose: #5c636b; --win-box: #2fd673; --win-ink: #0a1f12;
 }
 * { box-sizing: border-box; }
 html { background: var(--bg); }
@@ -37,7 +38,13 @@ body {
   margin: 0; padding: 0 1rem 4rem; background: var(--bg); color: var(--text);
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
-main { max-width: 980px; margin: 0 auto; padding: 0 0.5rem; }
+.layout {
+  max-width: 1300px; margin: 0 auto; padding: 0 0.5rem;
+  display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start;
+}
+.layout.no-sidebar { grid-template-columns: 1fr; max-width: 980px; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+main { min-width: 0; }
 header {
   padding: 2.5rem 0 1.75rem;
   border-bottom: 1px solid var(--border);
@@ -69,23 +76,34 @@ section { margin-bottom: 2.25rem; }
 .ticket-live { border-left-color: var(--live); padding-top: 2.1rem; }
 .ticket-completed { opacity: 0.88; }
 .ticket-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.6rem; }
+.team-line { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.team-line.team-a { justify-content: flex-end; }
+.team-line.team-b { justify-content: flex-start; }
+.flag {
+  width: 20px; height: 14px; object-fit: cover; border-radius: 2px; flex: none;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.team-logo {
+  width: 34px; height: 34px; object-fit: contain; border-radius: 6px; flex: none;
+  background: var(--bg-wash); padding: 4px;
+}
 .team {
   font: 700 1.15rem/1.25 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
-  font-stretch: condensed; letter-spacing: 0.01em;
+  font-stretch: condensed; letter-spacing: 0.01em; min-width: 0; overflow-wrap: break-word;
 }
 a.team { color: inherit; text-decoration: none; }
 a.team:hover { color: var(--accent); text-decoration: underline; }
-.team-a { text-align: right; }
-.team-b { text-align: left; }
 .vs { color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .score {
-  display: flex; align-items: baseline; gap: 0.3rem; justify-content: center;
+  display: flex; align-items: center; gap: 0.3rem; justify-content: center;
   font: 700 1.2rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
   font-variant-numeric: tabular-nums;
 }
 .score .dash { color: var(--text-dim); font-weight: 400; }
-.score .digit { color: var(--lose); min-width: 1ch; text-align: center; }
-.score .digit.winner { color: var(--win); }
+.score .digit { color: var(--lose); min-width: 1.5ch; text-align: center; padding: 0.08rem 0; }
+.score .digit.winner {
+  color: var(--win-ink); background: var(--win-box); border-radius: 4px; padding: 0.08rem 0.4rem;
+}
 .ticket-meta {
   display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
   margin-top: 0.55rem; font-size: 0.78rem; color: var(--text-dim);
@@ -94,6 +112,8 @@ a.team:hover { color: var(--accent); text-decoration: underline; }
 .when { font-variant-numeric: tabular-nums; }
 .twitch-link { color: var(--accent); text-decoration: none; font-weight: 600; }
 .twitch-link:hover { text-decoration: underline; }
+.result-link { color: var(--text-dim); text-decoration: none; font-weight: 600; }
+.result-link:hover { color: var(--accent); text-decoration: underline; }
 .badge {
   margin-left: auto; display: inline-flex; align-items: center; gap: 0.35rem;
   font: 700 0.68rem/1 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.06em;
@@ -116,6 +136,70 @@ a.team:hover { color: var(--accent); text-decoration: underline; }
   font: 700 0.98rem/1.3 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
   font-stretch: condensed; letter-spacing: 0.01em;
 }
+.section-bracket h2 { color: var(--accent); }
+.bracket {
+  display: flex; gap: 1.75rem; overflow-x: auto; padding: 0.2rem 0.2rem 0.6rem; align-items: stretch;
+}
+.bracket-col { display: flex; flex-direction: column; min-width: 190px; flex: none; }
+.bracket-aside { border-left: 1px dashed var(--border); padding-left: 1.75rem; }
+.bracket-col-title {
+  font: 700 0.72rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 0.7rem; text-align: center;
+}
+.bracket-matches { display: flex; flex-direction: column; justify-content: space-around; flex: 1; gap: 0.9rem; }
+.bracket-match {
+  display: block; background: var(--card); border: 1px solid var(--border); border-radius: 5px;
+  overflow: hidden; text-decoration: none; color: inherit;
+}
+a.bracket-match:hover { border-color: var(--accent); }
+.bracket-team { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; font-size: 0.82rem; }
+.bracket-team + .bracket-team { border-top: 1px solid var(--border); }
+.bracket-team .flag { width: 16px; height: 11px; }
+.bracket-team .team-logo { width: 20px; height: 20px; padding: 2px; }
+.bracket-team-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; color: var(--text-dim);
+}
+.bracket-team.winner .bracket-team-name { color: var(--text); }
+.bracket-score {
+  font: 700 0.82rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  min-width: 1.4ch; text-align: center; color: var(--text-dim); flex: none;
+}
+.bracket-team.winner .bracket-score {
+  background: var(--win-box); color: var(--win-ink); border-radius: 3px; padding: 0.05rem 0.4rem;
+}
+.sidebar { position: sticky; top: 1rem; display: flex; flex-direction: column; gap: 1.1rem; }
+.comp-banner {
+  display: flex; align-items: center; gap: 0.85rem; padding: 1.1rem;
+  border-radius: 8px; border: 1px solid var(--border); border-top: 3px solid var(--accent);
+  background: var(--card); text-decoration: none; color: inherit;
+}
+.comp-banner:hover { border-color: var(--accent); }
+.comp-banner-logo { width: 48px; height: 48px; object-fit: contain; flex: none; }
+.comp-banner-name {
+  font: 800 1.05rem/1.2 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font-stretch: condensed; text-wrap: balance;
+}
+.comp-banner-date { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.3rem; }
+.comp-panel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem; }
+.comp-panel h3 {
+  font: 700 0.72rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-dim); margin: 0 0 0.75rem;
+}
+.comp-info-row { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.42rem 0; font-size: 0.82rem; }
+.comp-info-row + .comp-info-row { border-top: 1px solid var(--border); }
+.comp-info-row dt { margin: 0; color: var(--text-dim); }
+.comp-info-row dd { margin: 0; font-weight: 600; text-align: right; display: flex; align-items: center; gap: 0.35rem; justify-content: flex-end; }
+.comp-info-row dd .flag { width: 16px; height: 11px; }
+.comp-team-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.comp-team-list a, .comp-team-row {
+  display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.4rem; border-radius: 5px;
+  text-decoration: none; color: var(--text); font-size: 0.84rem; font-weight: 600;
+}
+.comp-team-list a:hover { background: var(--bg-wash); }
+.comp-team-list .team-logo { width: 22px; height: 22px; padding: 2px; }
+.comp-team-list .flag { width: 18px; height: 13px; }
+.comp-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .section-rewards h2 { color: var(--accent); }
 .rewards-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }
 .reward-card {
@@ -145,6 +229,7 @@ a { color: inherit; }
 </style>
 </head>
 <body>
+<div class="layout">
 <main>
   <header>
     <p class="eyebrow">Rainbow Six Siege · Esports</p>
@@ -166,194 +251,242 @@ a { color: inherit; }
       <h2>Upcoming (next 30 days)</h2>
       <div class="ticket-list"><p class="empty">No further matches scheduled in this window.</p></div>
     </section>
+    <section class="section-bracket">
+      <h2>Playoff bracket · Esports World Cup 2026</h2>
+      <div class="bracket">
+        <div class="bracket-col">
+          <div class="bracket-col-title">Quarter Finals</div>
+          <div class="bracket-matches"><a class="bracket-match" href="https://siege.gg/matches/6150-ewc-intl-wildcard-vs-furia-esports" target="_blank" rel="noopener"><div class="bracket-team"><img class="team-logo" src="https://cdn.siege.gg/org-536-wc-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"><span class="bracket-team-name">Wildcard</span><span class="bracket-score">0</span></div><div class="bracket-team winner"><img class="team-logo" src="https://cdn.siege.gg/org-625-furia.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><span class="bracket-team-name">FURIA Esports</span><span class="bracket-score">2</span></div></a><a class="bracket-match" href="https://siege.gg/matches/6151-ewc-intl-darkzero-esports-vs-weibo-gaming" target="_blank" rel="noopener"><div class="bracket-team winner"><img class="team-logo" src="https://cdn.siege.gg/org-357-dzro.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"><span class="bracket-team-name">DarkZero Esports</span><span class="bracket-score">2</span></div><div class="bracket-team"><img class="team-logo" src="https://cdn.siege.gg/org-1128-weibo.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/un.svg" alt="" loading="lazy"><span class="bracket-team-name">Weibo Gaming</span><span class="bracket-score">1</span></div></a><a class="bracket-match" href="https://siege.gg/matches/6152-ewc-intl-faze-clan-vs-team-liquid" target="_blank" rel="noopener"><div class="bracket-team winner"><img class="team-logo" src="https://cdn.siege.gg/org-24-faze-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><span class="bracket-team-name">FaZe Clan</span><span class="bracket-score">2</span></div><div class="bracket-team"><img class="team-logo" src="https://cdn.siege.gg/org-69-tl-3.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><span class="bracket-team-name">Team Liquid</span><span class="bracket-score">1</span></div></a><a class="bracket-match" href="https://siege.gg/matches/6153-ewc-intl-geekay-esports-vs-team-secret" target="_blank" rel="noopener"><div class="bracket-team winner"><img class="team-logo" src="https://cdn.siege.gg/org-993-gkay-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><span class="bracket-team-name">Geekay Esports</span><span class="bracket-score">2</span></div><div class="bracket-team"><img class="team-logo" src="https://cdn.siege.gg/org-311-scrt.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><span class="bracket-team-name">Team Secret</span><span class="bracket-score">0</span></div></a></div>
+        </div>
+        <div class="bracket-col">
+          <div class="bracket-col-title">Semi Finals</div>
+          <div class="bracket-matches"><a class="bracket-match" href="https://siege.gg/matches/6154-ewc-intl-darkzero-esports-vs-furia-esports" target="_blank" rel="noopener"><div class="bracket-team"><img class="team-logo" src="https://cdn.siege.gg/org-357-dzro.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"><span class="bracket-team-name">DarkZero Esports</span><span class="bracket-score">1</span></div><div class="bracket-team winner"><img class="team-logo" src="https://cdn.siege.gg/org-625-furia.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><span class="bracket-team-name">FURIA Esports</span><span class="bracket-score">2</span></div></a><a class="bracket-match" href="https://siege.gg/matches/6155-ewc-intl-faze-clan-vs-geekay-esports" target="_blank" rel="noopener"><div class="bracket-team winner"><img class="team-logo" src="https://cdn.siege.gg/org-24-faze-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><span class="bracket-team-name">FaZe Clan</span><span class="bracket-score">2</span></div><div class="bracket-team"><img class="team-logo" src="https://cdn.siege.gg/org-993-gkay-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><span class="bracket-team-name">Geekay Esports</span><span class="bracket-score">1</span></div></a></div>
+        </div>
+        <div class="bracket-col">
+          <div class="bracket-col-title">Grand Finals</div>
+          <div class="bracket-matches"><a class="bracket-match" href="https://siege.gg/matches/6157-ewc-intl-furia-esports-vs-faze-clan" target="_blank" rel="noopener"><div class="bracket-team"><img class="team-logo" src="https://cdn.siege.gg/org-625-furia.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><span class="bracket-team-name">FURIA Esports</span><span class="bracket-score">1</span></div><div class="bracket-team winner"><img class="team-logo" src="https://cdn.siege.gg/org-24-faze-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><span class="bracket-team-name">FaZe Clan</span><span class="bracket-score">3</span></div></a></div>
+        </div>
+        <div class="bracket-col bracket-aside">
+          <div class="bracket-col-title">Third Place</div>
+          <div class="bracket-matches"><a class="bracket-match" href="https://siege.gg/matches/6156-ewc-intl-darkzero-esports-vs-geekay-esports" target="_blank" rel="noopener"><div class="bracket-team winner"><img class="team-logo" src="https://cdn.siege.gg/org-357-dzro.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"><span class="bracket-team-name">DarkZero Esports</span><span class="bracket-score">2</span></div><div class="bracket-team"><img class="team-logo" src="https://cdn.siege.gg/org-993-gkay-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><span class="bracket-team-name">Geekay Esports</span><span class="bracket-score">1</span></div></a></div>
+        </div></div>
+    </section>
     <section class="section-completed">
       <h2>Recent results (last 7 days)</h2>
       <div class="ticket-list">
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/FURIA" target="_blank" rel="noopener">FURIA</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-625-furia.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/FURIA" target="_blank" rel="noopener">FURIA</a></span>
         <span class="score"><span class="digit">1</span><span class="dash">–</span><span class="digit winner">3</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/FaZe_Clan" target="_blank" rel="noopener">FaZe Clan</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/FaZe_Clan" target="_blank" rel="noopener">FaZe Clan</a><img class="team-logo" src="https://cdn.siege.gg/org-24-faze-1.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Playoffs</span>
         <span class="dot-sep">·</span>
         <span class="when">Sat 15 Aug, 17:30 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6157-ewc-intl-furia-esports-vs-faze-clan" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/DarkZero" target="_blank" rel="noopener">DarkZero</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-357-dzro.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/DarkZero" target="_blank" rel="noopener">DarkZero</a></span>
         <span class="score"><span class="digit winner">2</span><span class="dash">–</span><span class="digit">1</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Geekay_Esports" target="_blank" rel="noopener">Geekay Esports</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Geekay_Esports" target="_blank" rel="noopener">Geekay Esports</a><img class="team-logo" src="https://cdn.siege.gg/org-993-gkay-1.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Playoffs</span>
         <span class="dot-sep">·</span>
         <span class="when">Sat 15 Aug, 13:30 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6156-ewc-intl-darkzero-esports-vs-geekay-esports" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/FaZe_Clan" target="_blank" rel="noopener">FaZe Clan</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-24-faze-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/FaZe_Clan" target="_blank" rel="noopener">FaZe Clan</a></span>
         <span class="score"><span class="digit winner">2</span><span class="dash">–</span><span class="digit">1</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Geekay_Esports" target="_blank" rel="noopener">Geekay Esports</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Geekay_Esports" target="_blank" rel="noopener">Geekay Esports</a><img class="team-logo" src="https://cdn.siege.gg/org-993-gkay-1.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Playoffs</span>
         <span class="dot-sep">·</span>
         <span class="when">Fri 14 Aug, 19:00 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6155-ewc-intl-faze-clan-vs-geekay-esports" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/FURIA" target="_blank" rel="noopener">FURIA</a>
-        <span class="score"><span class="digit winner">2</span><span class="dash">–</span><span class="digit">1</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/DarkZero" target="_blank" rel="noopener">DarkZero</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-625-furia.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/FURIA" target="_blank" rel="noopener">FURIA</a></span>
+        <span class="score"><span class="digit">1</span><span class="dash">–</span><span class="digit winner">2</span></span>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/DarkZero" target="_blank" rel="noopener">DarkZero</a><img class="team-logo" src="https://cdn.siege.gg/org-357-dzro.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Playoffs</span>
         <span class="dot-sep">·</span>
         <span class="when">Fri 14 Aug, 16:00 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6154-ewc-intl-darkzero-esports-vs-furia-esports" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/FaZe_Clan" target="_blank" rel="noopener">FaZe Clan</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-24-faze-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/FaZe_Clan" target="_blank" rel="noopener">FaZe Clan</a></span>
         <span class="score"><span class="digit winner">2</span><span class="dash">–</span><span class="digit">1</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Team_Liquid" target="_blank" rel="noopener">Team Liquid</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Team_Liquid" target="_blank" rel="noopener">Team Liquid</a><img class="team-logo" src="https://cdn.siege.gg/org-69-tl-3.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Playoffs</span>
         <span class="dot-sep">·</span>
         <span class="when">Thu 13 Aug, 18:30 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6152-ewc-intl-faze-clan-vs-team-liquid" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/Geekay_Esports" target="_blank" rel="noopener">Geekay Esports</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-993-gkay-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Geekay_Esports" target="_blank" rel="noopener">Geekay Esports</a></span>
         <span class="score"><span class="digit winner">2</span><span class="dash">–</span><span class="digit">0</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Team_Secret" target="_blank" rel="noopener">Team Secret</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Team_Secret" target="_blank" rel="noopener">Team Secret</a><img class="team-logo" src="https://cdn.siege.gg/org-311-scrt.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Playoffs</span>
         <span class="dot-sep">·</span>
         <span class="when">Thu 13 Aug, 16:00 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6153-ewc-intl-geekay-esports-vs-team-secret" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/Wildcard" target="_blank" rel="noopener">Wildcard</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-536-wc-1.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Wildcard" target="_blank" rel="noopener">Wildcard</a></span>
         <span class="score"><span class="digit">0</span><span class="dash">–</span><span class="digit winner">2</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/FURIA" target="_blank" rel="noopener">FURIA</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/FURIA" target="_blank" rel="noopener">FURIA</a><img class="team-logo" src="https://cdn.siege.gg/org-625-furia.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Playoffs</span>
         <span class="dot-sep">·</span>
         <span class="when">Wed 12 Aug, 19:00 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6150-ewc-intl-wildcard-vs-furia-esports" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/DarkZero" target="_blank" rel="noopener">DarkZero</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-357-dzro.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/DarkZero" target="_blank" rel="noopener">DarkZero</a></span>
         <span class="score"><span class="digit winner">2</span><span class="dash">–</span><span class="digit">1</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Weibo_Gaming" target="_blank" rel="noopener">Weibo Gaming</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/un.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Weibo_Gaming" target="_blank" rel="noopener">Weibo Gaming</a><img class="team-logo" src="https://cdn.siege.gg/org-1128-weibo.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Playoffs</span>
         <span class="dot-sep">·</span>
         <span class="when">Wed 12 Aug, 16:00 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6151-ewc-intl-darkzero-esports-vs-weibo-gaming" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/FURIA" target="_blank" rel="noopener">FURIA</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-625-furia.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/FURIA" target="_blank" rel="noopener">FURIA</a></span>
         <span class="score"><span class="digit winner">2</span><span class="dash">–</span><span class="digit">1</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Fnatic" target="_blank" rel="noopener">Fnatic</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Fnatic" target="_blank" rel="noopener">Fnatic</a><img class="team-logo" src="https://cdn.siege.gg/org-26-fnc.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Group B</span>
         <span class="dot-sep">·</span>
         <span class="when">Sun 09 Aug, 19:00 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6141-ewc-intl-furia-esports-vs-fnatic" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/CAG_by_VARREL" target="_blank" rel="noopener">CAG by VARREL</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-1277-cagv.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/jp.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/CAG_by_VARREL" target="_blank" rel="noopener">CAG by VARREL</a></span>
         <span class="score"><span class="digit">1</span><span class="dash">–</span><span class="digit winner">2</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Team_Liquid" target="_blank" rel="noopener">Team Liquid</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Team_Liquid" target="_blank" rel="noopener">Team Liquid</a><img class="team-logo" src="https://cdn.siege.gg/org-69-tl-3.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Group A</span>
         <span class="dot-sep">·</span>
         <span class="when">Sun 09 Aug, 18:15 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6145-ewc-intl-cag-by-varrel-vs-team-liquid" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/Virtus.pro" target="_blank" rel="noopener">Virtus.pro</a>
-        <span class="score"><span class="digit">1</span><span class="dash">–</span><span class="digit winner">2</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Weibo_Gaming" target="_blank" rel="noopener">Weibo Gaming</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-656-vp.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/ru.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Virtus.pro" target="_blank" rel="noopener">Virtus.pro</a></span>
+        <span class="score"><span class="digit winner">1</span><span class="dash">–</span><span class="digit">2</span></span>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/un.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Weibo_Gaming" target="_blank" rel="noopener">Weibo Gaming</a><img class="team-logo" src="https://cdn.siege.gg/org-1128-weibo.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Group B</span>
         <span class="dot-sep">·</span>
         <span class="when">Sun 09 Aug, 16:00 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6144-ewc-intl-virtuspro-vs-weibo-gaming" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article>
     <article class="ticket ticket-completed">
       <div class="ticket-row">
-        <a class="team team-a" href="https://liquipedia.net/rainbowsix/Team_Falcons" target="_blank" rel="noopener">Team Falcons</a>
+        <span class="team-line team-a"><img class="team-logo" src="https://cdn.siege.gg/org-984-flcn.png" alt="" loading="lazy"><img class="flag" src="https://cdn.siege.gg/flags/fr.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Team_Falcons" target="_blank" rel="noopener">Team Falcons</a></span>
         <span class="score"><span class="digit">0</span><span class="dash">–</span><span class="digit winner">2</span></span>
-        <a class="team team-b" href="https://liquipedia.net/rainbowsix/Team_Secret" target="_blank" rel="noopener">Team Secret</a>
+        <span class="team-line team-b"><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"><a class="team" href="https://liquipedia.net/rainbowsix/Team_Secret" target="_blank" rel="noopener">Team Secret</a><img class="team-logo" src="https://cdn.siege.gg/org-311-scrt.png" alt="" loading="lazy"></span>
       </div>
       <div class="ticket-meta">
         <span class="tournament">Esports World Cup 2026 - Group A</span>
         <span class="dot-sep">·</span>
         <span class="when">Sun 09 Aug, 16:00 Paris</span>
         
+        <a class="result-link" href="https://siege.gg/matches/6142-ewc-intl-team-falcons-vs-team-secret" target="_blank" rel="noopener">Match page ↗</a>
         <span class="badge badge-done">Final</span>
         
       </div>
     </article></div>
     </section>
   <footer>
-    <span>Updated Sun 16 Aug 2026, 13:37 (Paris time)</span>
-    <span>Sources: Ubisoft, Liquipedia, twitchdrops.app</span>
+    <span>Updated Sun 16 Aug 2026, 13:42 (Paris time)</span>
+    <span>Sources: Ubisoft, Liquipedia, siege.gg, twitchdrops.app</span>
   </footer>
 </main>
+
+    <aside class="sidebar">
+      <a class="comp-banner" href="https://siege.gg/competitions/183-esports-world-cup-2026" target="_blank" rel="noopener">
+        <img class="comp-banner-logo" src="https://cdn.siege.gg/esports-world-cup-2026.png" alt="" loading="lazy">
+        <div>
+          <div class="comp-banner-name">Esports World Cup 2026</div>
+          <div class="comp-banner-date">Aug 4 – 15, 2026</div>
+        </div>
+      </a>
+      <div class="comp-panel">
+        <h3>This competition</h3>
+        <div class="comp-info-row"><dt>Type</dt><dd>LAN</dd></div><div class="comp-info-row"><dt>Region</dt><dd>International</dd></div><div class="comp-info-row"><dt>Prize pool</dt><dd>$2,000,000</dd></div><div class="comp-info-row"><dt>Location</dt><dd>Paris, France<img class="flag" src="https://cdn.siege.gg/flags/fr.svg" alt="" loading="lazy"></dd></div><div class="comp-info-row"><dt>Venue</dt><dd>Paris Expo Porte de Versailles</dd></div>
+      </div>
+      <div class="comp-panel"><h3>Participating teams</h3><ul class="comp-team-list"><li><a href="https://siege.gg/teams/285-team-liquid" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-69-tl-3.png" alt="" loading="lazy"><span class="comp-team-name">Team Liquid</span><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/967-chiefs-esports-club" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-811-chiefs.png" alt="" loading="lazy"><span class="comp-team-name">Chiefs Esports Club</span><img class="flag" src="https://cdn.siege.gg/flags/au.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/7-team-secret" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-311-scrt.png" alt="" loading="lazy"><span class="comp-team-name">Team Secret</span><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/367-team-falcons" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-984-flcn.png" alt="" loading="lazy"><span class="comp-team-name">Team Falcons</span><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/108-cag-by-varrel" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1277-cagv.png" alt="" loading="lazy"><span class="comp-team-name">CAG by VARREL</span><img class="flag" src="https://cdn.siege.gg/flags/jp.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/5-fnatic" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-26-fnc.png" alt="" loading="lazy"><span class="comp-team-name">Fnatic</span><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/742-weibo-gaming" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1128-weibo.png" alt="" loading="lazy"><span class="comp-team-name">Weibo Gaming</span><img class="flag" src="https://cdn.siege.gg/flags/un.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/125-shopify-rebellion" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1122-shop.png" alt="" loading="lazy"><span class="comp-team-name">Shopify Rebellion</span><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/947-mibrlos" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1275-ml.png" alt="" loading="lazy"><span class="comp-team-name">MIBR.LOS</span><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/909-agal" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1276-agal.png" alt="" loading="lazy"><span class="comp-team-name">AG.AL</span><img class="flag" src="https://cdn.siege.gg/flags/cn.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/725-wildcard" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-536-wc-1.png" alt="" loading="lazy"><span class="comp-team-name">Wildcard</span><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/272-virtuspro" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-656-vp.png" alt="" loading="lazy"><span class="comp-team-name">Virtus.pro</span><img class="flag" src="https://cdn.siege.gg/flags/ru.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/954-edward-gaming" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1229-edg.png" alt="" loading="lazy"><span class="comp-team-name">EDward Gaming</span><img class="flag" src="https://cdn.siege.gg/flags/cn.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/946-furia-esports" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-625-furia.png" alt="" loading="lazy"><span class="comp-team-name">FURIA Esports</span><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/855-enterprise-esports" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1169-ep.png" alt="" loading="lazy"><span class="comp-team-name">ENTERPRISE Esports</span><img class="flag" src="https://cdn.siege.gg/flags/au.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/826-al-ula" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1217-aula.png" alt="" loading="lazy"><span class="comp-team-name">Al Ula</span><img class="flag" src="https://cdn.siege.gg/flags/sa.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/465-darkzero-esports" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-357-dzro.png" alt="" loading="lazy"><span class="comp-team-name">DarkZero Esports</span><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/652-m80" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-963-m80-1.png" alt="" loading="lazy"><span class="comp-team-name">M80</span><img class="flag" src="https://cdn.siege.gg/flags/us.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/50-faze-clan" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-24-faze-1.png" alt="" loading="lazy"><span class="comp-team-name">FaZe Clan</span><img class="flag" src="https://cdn.siege.gg/flags/br.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/886-geekay-esports" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-993-gkay-1.png" alt="" loading="lazy"><span class="comp-team-name">Geekay Esports</span><img class="flag" src="https://cdn.siege.gg/flags/eu.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/952-tyloo" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1228-tyl.png" alt="" loading="lazy"><span class="comp-team-name">TYLOO</span><img class="flag" src="https://cdn.siege.gg/flags/tw.svg" alt="" loading="lazy"></a></li><li><a href="https://siege.gg/teams/949-kingzero-esports" target="_blank" rel="noopener"><img class="team-logo" src="https://cdn.siege.gg/org-1225-kz.png" alt="" loading="lazy"><span class="comp-team-name">KINGZERO eSports</span><img class="flag" src="https://cdn.siege.gg/flags/hk.svg" alt="" loading="lazy"></a></li></ul></div>
+    </aside>
+</div>
 </body>
 </html>

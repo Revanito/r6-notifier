@@ -1,8 +1,8 @@
-# r6-notifier
+# r6-ops-board
 
-Two small Docker services that track Rainbow Six Siege esports from public data, just polling public sources on a schedule.
+Two small Docker services that track Rainbow Six Siege esports from public data, just polling public sources on a schedule. (Repo was named `r6-notifier` until the site generator grew past being a side feature of the notifier — renamed to describe the whole project instead of one service.)
 
-**🎮 Live page: [revanito.github.io/r6-notifier](https://revanito.github.io/r6-notifier/)**
+**🎮 Live page: [revanito.github.io/r6-ops-board](https://revanito.github.io/r6-ops-board/)**
 
 ## What it does
 

@@ -6,8 +6,6 @@ import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-import schedule
-
 import sources
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -23,6 +21,11 @@ DOCS_SUBDIR = os.environ.get("SITE_DOCS_SUBDIR", "docs")
 BRANCH = os.environ.get("SITE_BRANCH", "main")
 
 BUILD_INTERVAL_MINUTES = int(os.environ.get("SITE_BUILD_INTERVAL_MINUTES", "10"))
+IDLE_BUILD_INTERVAL_MINUTES = int(os.environ.get("SITE_IDLE_BUILD_INTERVAL_MINUTES", str(24 * 60)))
+# A match live right now always counts; otherwise "is an event going on" means
+# something's scheduled to start within this many hours - keeps the site on
+# the fast interval through same-day gaps between matches, not just during them.
+ACTIVE_LOOKAHEAD_HOURS = float(os.environ.get("ACTIVE_LOOKAHEAD_HOURS", "48"))
 TZ_NAME = os.environ.get("TZ_NAME", "Europe/Paris")
 LOCAL_TZ = ZoneInfo(TZ_NAME)
 RUN_ON_START = os.environ.get("RUN_ON_START", "false").lower() == "true"
@@ -655,6 +658,8 @@ def build_and_commit():
     upcoming = [m for m in upcoming if m["timestamp"] <= now + UPCOMING_WINDOW_DAYS * 86400]
     completed = [m for m in completed if m["timestamp"] >= now - RESULTS_WINDOW_DAYS * 86400]
 
+    event_active = bool(live) or any(m["timestamp"] <= now + ACTIVE_LOOKAHEAD_HOURS * 3600 for m in upcoming)
+
     rewards, drops_channels = [], set()
     try:
         rewards, drops_channels = sources.fetch_active_drops()
@@ -711,31 +716,37 @@ def build_and_commit():
     status = run_git(["status", "--porcelain", "--", DOCS_SUBDIR])
     if not status.stdout.strip():
         log.info("no changes, skipping commit")
-        return
+        return event_active
 
     run_git(["commit", "-m", f"Update site {generated_at.isoformat()}"])
     run_git(["push", "origin", BRANCH])
     log.info("pushed site update")
+    return event_active
 
 
 def safe_build_and_commit():
     try:
-        build_and_commit()
+        return build_and_commit()
     except Exception:
-        log.exception("site build failed, will retry next interval")
+        log.exception("site build failed, will retry sooner")
+        return True  # assume the worst so we retry at the short interval, not the 24h one
 
 
 def main():
-    log.info("r6-site starting, build interval=%d min", BUILD_INTERVAL_MINUTES)
+    log.info(
+        "r6-site starting, active interval=%d min, idle interval=%d min (event window: next %g h)",
+        BUILD_INTERVAL_MINUTES, IDLE_BUILD_INTERVAL_MINUTES, ACTIVE_LOOKAHEAD_HOURS,
+    )
 
-    schedule.every(BUILD_INTERVAL_MINUTES).minutes.do(safe_build_and_commit)
-
+    event_active = True
     if RUN_ON_START:
-        safe_build_and_commit()
+        event_active = safe_build_and_commit()
 
     while True:
-        schedule.run_pending()
-        time.sleep(30)
+        interval_minutes = BUILD_INTERVAL_MINUTES if event_active else IDLE_BUILD_INTERVAL_MINUTES
+        log.info("next build in %d min (%s)", interval_minutes, "event window" if event_active else "idle")
+        time.sleep(interval_minutes * 60)
+        event_active = safe_build_and_commit()
 
 
 if __name__ == "__main__":

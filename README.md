@@ -10,16 +10,18 @@ Two small Docker services that track Rainbow Six Siege esports from public data,
 - when a watched Twitch channel (default `rainbow6`) goes live
 - upcoming matches in the next ~30 hours (teams, tournament, time, Twitch link)
 
-**`r6-site`** — regenerates a static results/schedule page, every 10 minutes if anything changed, and pushes it to `docs/` on this repo's `main` branch. GitHub Pages serves that folder. Sections: Live now, Upcoming today, Upcoming (next 30 days), Recent results (last 7 days).
+**`r6-site`** — regenerates a static results/schedule page and pushes it to `docs/` on this repo's `main` branch, only when the rendered page actually changed. GitHub Pages serves that folder. Sections: Live now, Active drops, Upcoming today, Upcoming (next 30 days), Playoff bracket (while one's relevant), Recent results (last 14 days) - plus a right-hand sidebar with the current tournament's info and participating teams.
+
+Rebuild frequency adapts automatically: every `SITE_BUILD_INTERVAL_MINUTES` (10) while a match is live or one's scheduled to start within `ACTIVE_LOOKAHEAD_HOURS` (48h), otherwise every `SITE_IDLE_BUILD_INTERVAL_MINUTES` (24h) - so quiet stretches between tournaments don't spam commits or Pages rebuilds for a page that isn't changing anyway.
 
 ## Data sources
 
-Two sources, merged:
 - **Ubisoft's official esports page** — authoritative (has a real `live` flag and final scores), but only covers whatever event Ubisoft is currently spotlighting on that page.
 - **[Liquipedia](https://liquipedia.net/rainbowsix/Liquipedia:Matches)** — much broader coverage (every tracked tournament), but occasionally lags on team reveals for not-yet-started bracket slots, and its "is this live" signal isn't trustworthy on its own.
+- **[siege.gg](https://siege.gg/matches)** — team country flags, org logos, per-map result score, a link to each match's recap page, and (via its per-competition and per-match APIs) the playoff bracket and tournament info sidebar.
 - **https://twitchdrops.app/game/tom-clancys-rainbow-six-siege** - Live campaigns for drops, for extracting the drop data.
 
-Because of that, Ubisoft's feed wins on overlap and is the *only* source trusted for "live right now"; Liquipedia fills in everything Ubisoft's narrow feed doesn't cover. Matches are de-duplicated by timestamp, and `TBD vs TBD` placeholder slots from Liquipedia are dropped in favor of Ubisoft's resolved data when available.
+Ubisoft's feed wins on overlap and is the *only* source trusted for "live right now"; Liquipedia fills in everything Ubisoft's narrow feed doesn't cover; siege.gg enriches whatever's left with flags/logos/links regardless of which of the first two supplied the match. Matches are de-duplicated by timestamp, and `TBD vs TBD` placeholder slots from Liquipedia are dropped in favor of Ubisoft's resolved data when available.
 
 ## Setup
 

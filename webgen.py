@@ -758,21 +758,76 @@ def render_archive_reward_card(entry):
     </article>"""
 
 
+def parse_watch_minutes(watch_time):
+    """"Watch 1h" / "Watch 30m" / "1 sub" -> minutes, for sorting reward
+    tiers in the order you'd actually earn them (30m, then 1h, then 1h30,
+    ...). Non-time rewards (sub gifts etc.) sort last."""
+    wt = (watch_time or "").lower()
+    hours = re.search(r"(\d+)\s*h", wt)
+    minutes = re.search(r"(\d+)\s*m", wt)
+    if not hours and not minutes:
+        return 10**6
+    return (int(hours.group(1)) * 60 if hours else 0) + (int(minutes.group(1)) if minutes else 0)
+
+
+def clean_campaign_dates_text(raw):
+    """twitchdrops.app trails a real start date with "- expired" once it's
+    past (e.g. "Aug 5 - expired") - strip that off for display; there's
+    nothing useful left once it's gone (no real end date is published)."""
+    return re.sub(r"[\s\W]*expired\s*$", "", raw, flags=re.I).strip() or raw
+
+
+def campaign_date_label(entries):
+    """Prefers the campaign's own published date range (scraped from its
+    twitchdrops.app banner) over our first/last-seen bookkeeping, which
+    only reflects when *we* happened to start scraping - not when the
+    campaign actually ran."""
+    for en in entries:
+        real_dates = en.get("campaign_dates")
+        if real_dates:
+            return clean_campaign_dates_text(real_dates)
+    first = min(en["first_seen"] for en in entries)
+    last = max(en["last_seen"] for en in entries)
+    return fmt_date(first) if first == last else f"{fmt_date(first)} – {fmt_date(last)}"
+
+
+def campaign_sort_date(entries):
+    """Best-effort sortable date for ordering campaign groups newest-first.
+    twitchdrops.app's published date text (e.g. "Aug 5") never includes a
+    year, so the year of whenever we first recorded this campaign is used
+    as a stand-in - fine in practice since campaigns get archived within
+    days of running, not months. Falls back to our own first-seen date
+    when no real published date was captured at all."""
+    for en in entries:
+        real_dates = en.get("campaign_dates")
+        if not real_dates:
+            continue
+        cleaned = clean_campaign_dates_text(real_dates)
+        m = re.match(r"([A-Za-z]{3,9})\s+(\d{1,2})", cleaned)
+        if m:
+            year = en["first_seen"][:4]
+            try:
+                return datetime.strptime(f"{m.group(1)[:3]} {m.group(2)} {year}", "%b %d %Y")
+            except ValueError:
+                pass
+    return datetime.strptime(min(en["first_seen"] for en in entries), "%Y-%m-%d")
+
+
 def build_drops_page(archive):
     groups = {}
     for entry in archive.values():
         groups.setdefault(entry.get("campaign") or "Uncategorized", []).append(entry)
-    ordered_groups = sorted(groups.items(), key=lambda kv: max(en["last_seen"] for en in kv[1]), reverse=True)
+    ordered_groups = sorted(groups.items(), key=lambda kv: campaign_sort_date(kv[1]), reverse=True)
 
     if not ordered_groups:
         sections_html = '<p class="empty">No drops recorded yet.</p>'
     else:
         sections_html = ""
         for campaign, entries in ordered_groups:
-            entries_sorted = sorted(entries, key=lambda en: (not en.get("active"), en["name"]))
-            first = min(en["first_seen"] for en in entries)
-            last = max(en["last_seen"] for en in entries)
-            date_range = fmt_date(first) if first == last else f"{fmt_date(first)} – {fmt_date(last)}"
+            entries_sorted = sorted(
+                entries, key=lambda en: (not en.get("active"), parse_watch_minutes(en.get("watch_time")))
+            )
+            date_range = campaign_date_label(entries)
             cards = "".join(render_archive_reward_card(en) for en in entries_sorted)
             sections_html += f"""
     <section class="drops-group">
@@ -894,9 +949,9 @@ def build_and_commit():
 
     rewards, drops_channels = [], set()
     try:
-        all_drop_cards, drops_channels = sources.fetch_all_drops()
+        all_drop_cards, drops_channels, campaign_dates = sources.fetch_all_drops()
         rewards = [c for c in all_drop_cards if not c["expired"]]
-        sources.update_drops_archive(drops_archive_path, all_drop_cards)
+        sources.update_drops_archive(drops_archive_path, all_drop_cards, campaign_dates)
     except Exception:
         log.exception("twitch drops fetch failed")
 

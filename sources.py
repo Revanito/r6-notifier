@@ -77,11 +77,14 @@ def _scrape_drops_page():
     keeps recently-expired cards on the same page for a while, tagged with an
     extra "drop-expired" class, before eventually rotating them out entirely).
 
-    Returns (all_cards, active_channels):
+    Returns (all_cards, active_channels, campaign_dates):
     - all_cards: every reward card found, each tagged "expired" -
       [{"name", "watch_time", "campaign", "image", "expired"}, ...]
     - active_channels: lowercased set of channel logins eligible right now
       (campaign banners whose countdown hasn't ended yet)
+    - campaign_dates: {campaign_name: raw_date_text} scraped from each
+      campaign's own banner (e.g. "Aug 5 - Aug 15") - a real published date
+      beats us just recording whenever *we* first happened to scrape it.
     """
     resp = requests.get(DROPS_URL, headers={"User-Agent": UBISOFT_UA}, timeout=20)
     resp.raise_for_status()
@@ -103,7 +106,16 @@ def _scrape_drops_page():
 
     now_ms = time.time() * 1000
     active_channels = set()
+    campaign_dates = {}
     for banner in soup.select(".campaign-banner"):
+        name_el = banner.select_one(".cb-name")
+        dates_el = banner.select_one(".cb-dates")
+        if name_el and dates_el:
+            name = name_el.get_text(strip=True)
+            dates_text = dates_el.get_text(strip=True)
+            if name and dates_text:
+                campaign_dates[name] = dates_text
+
         timer = banner.select_one(".cb-timer[data-end-ts]")
         if timer:
             try:
@@ -116,20 +128,21 @@ def _scrape_drops_page():
             if m:
                 active_channels.add(m.group(1).lower())
 
-    return cards, active_channels
+    return cards, active_channels, campaign_dates
 
 
 def fetch_active_drops():
     """Currently-active rewards only, for the live page. Returns
     (rewards, active_channels) - see _scrape_drops_page()."""
-    cards, active_channels = _scrape_drops_page()
+    cards, active_channels, _campaign_dates = _scrape_drops_page()
     rewards = [{k: v for k, v in c.items() if k != "expired"} for c in cards if not c["expired"]]
     return rewards, active_channels
 
 
 def fetch_all_drops():
-    """Every reward card currently on the page, active or expired, for
-    archiving. Returns (cards, active_channels) - see _scrape_drops_page()."""
+    """Every reward card currently on the page, active or expired, plus
+    each campaign's real published date range, for archiving. Returns
+    (cards, active_channels, campaign_dates) - see _scrape_drops_page()."""
     return _scrape_drops_page()
 
 
@@ -645,28 +658,41 @@ def save_json_archive(path, data):
         f.write("\n")
 
 
-def update_drops_archive(path, cards):
+def update_drops_archive(path, cards, campaign_dates=None):
     """Merges freshly-scraped drop cards (active or expired) into a
-    persistent archive keyed by "campaign|name". twitchdrops.app only keeps
-    an expired card visible for a while before eventually rotating it off
-    the page entirely - this is the only way to retain a reward once that
-    happens, since we only see what's currently on the page each build.
-    Records first/last-seen dates (day granularity is enough here)."""
+    persistent archive keyed by "campaign|name|watch_time". twitchdrops.app
+    only keeps an expired card visible for a while before eventually
+    rotating it off the page entirely - this is the only way to retain a
+    reward once that happens, since we only see what's currently on the
+    page each build. watch_time is part of the key because a single named
+    reward (e.g. "Esports Pack") is routinely offered at several watch-time
+    tiers in the same campaign (30m / 1h / 1h30, typically 3) as separate
+    cards - keying on campaign+name alone collapsed all of those into one
+    entry, silently dropping the rest.
+
+    Records first/last-seen dates (day granularity) as a fallback only -
+    when campaign_dates has a real published date range for a card's
+    campaign, that's used instead of "whenever we happened to scrape it"."""
+    campaign_dates = campaign_dates or {}
     archive = load_json_archive(path)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     for card in cards:
         if not card.get("name"):
             continue
-        key = f"{card.get('campaign', '')}|{card['name']}"
+        campaign = card.get("campaign", "")
+        key = f"{campaign}|{card['name']}|{card.get('watch_time', '')}"
         entry = archive.setdefault(key, {
             "name": card["name"],
-            "campaign": card.get("campaign", ""),
+            "campaign": campaign,
             "first_seen": today,
         })
         entry["watch_time"] = card.get("watch_time") or entry.get("watch_time", "")
         entry["image"] = card.get("image") or entry.get("image")
         entry["last_seen"] = today
         entry["active"] = not card["expired"]  # status as of the last time we saw this card at all
+        real_dates = campaign_dates.get(campaign)
+        if real_dates:
+            entry["campaign_dates"] = real_dates
     save_json_archive(path, archive)
     return archive
 

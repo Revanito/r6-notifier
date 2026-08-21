@@ -358,7 +358,7 @@ def fmt_date(date_str):
         return date_str
 
 
-NAV_LINKS = [("index.html", "Ops Board"), ("drops.html", "Drops Archive"), ("events.html", "Past Events")]
+NAV_LINKS = [("index", "Ops Board"), ("drops", "Drops Archive"), ("events", "Past Events")]
 
 
 def render_nav(current, root_prefix=""):
@@ -729,7 +729,7 @@ def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadc
     <p class="eyebrow">Rainbow Six Siege · Esports</p>
     <h1>Ops Board</h1>
     <p class="subtitle">Live status, upcoming matches, recent results, and archives of past drops and events, pulled from Ubisoft's official feed and Liquipedia.</p>
-    {render_nav("index.html")}
+    {render_nav("index")}
   </header>
   {sections}
   <footer>
@@ -846,7 +846,7 @@ def build_drops_page(archive):
         eyebrow="Rainbow Six Siege · Esports",
         subtitle=e("A permanent record of every Twitch drops campaign tracked on this site."),
         body_html=note + sections_html,
-        current_nav="drops.html",
+        current_nav="drops",
     )
 
 
@@ -882,7 +882,7 @@ def render_event_row(entry):
     if winner:
         winner_html = f'<div class="event-row-winner"><div class="event-row-winner-label">Winner</div><div class="event-row-winner-name">{e(winner)}</div></div>'
     return f"""
-    <a class="event-row" href="events/{event_slug(entry)}.html">
+    <a class="event-row" href="events/{event_slug(entry)}">
       {logo_html}
       <div class="event-row-main">
         <div class="event-row-name">{e(info.get("name") or "Unknown tournament")}</div>
@@ -909,7 +909,7 @@ def build_events_index_page(archive):
         eyebrow="Rainbow Six Siege · Esports",
         subtitle=e("Archived brackets and info for every tournament this site has featured."),
         body_html=note + body,
-        current_nav="events.html",
+        current_nav="events",
     )
 
 
@@ -922,9 +922,9 @@ def build_event_detail_page(entry):
     return page_shell(
         title=name,
         eyebrow="Rainbow Six Siege · Esports · Archived Event",
-        subtitle='<a href="../events.html">← Back to Past Events</a>',
+        subtitle='<a href="../events">← Back to Past Events</a>',
         body_html=body,
-        current_nav="events.html",
+        current_nav="events",
         sidebar_html=render_sidebar(info),
         root_prefix="../",
     )

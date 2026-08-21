@@ -2,7 +2,7 @@
 
 Two small Docker services that track Rainbow Six Siege esports from public data, just polling public sources on a schedule. (Repo was named `r6-notifier` until the site generator grew past being a side feature of the notifier — renamed to describe the whole project instead of one service.)
 
-**🎮 Live page: [revanito.github.io/r6-ops-board](https://revanito.github.io/r6-ops-board/)**
+**🎮 Live page: [r6.vaultinc.fr](https://r6.vaultinc.fr/)** (also reachable at [revanito.github.io/r6-ops-board](https://revanito.github.io/r6-ops-board/) — GitHub Pages serves both, one isn't a redirect of the other)
 
 ## What it does
 
@@ -37,6 +37,8 @@ Ubisoft's feed wins on overlap and is the *only* source trusted for "live right 
 6. `docker compose up -d --build`
 
 That starts both services. State (which matches/live-transitions were already notified) is persisted in `./data/state.json`; the site generator's own git clone lives in `./site-repo/`.
+
+**Optional: custom domain.** Add a `CNAME` record for your subdomain pointing at `<username>.github.io` (no trailing content, GitHub's own DNS resolves the rest), then Settings → Pages → Custom domain → enter the subdomain → Save. GitHub writes a `CNAME` file into `docs/` automatically once saved - `webgen.py` never touches or deletes files it didn't write, so it survives every future rebuild untouched. GitHub auto-issues an HTTPS cert once its DNS check passes (usually minutes after the DNS record itself has propagated); the plain `github.io` URL keeps serving the exact same content the whole time, unaffected.
 
 ## Notes
 

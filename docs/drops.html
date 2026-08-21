@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drops Archive</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+
+:root {
+  --bg: #eef0f2;
+  --bg-wash: #e4e7ea;
+  --card: #ffffff;
+  --text: #12151a;
+  --text-dim: #5b6470;
+  --border: #d8dce1;
+  --accent: #d9600a;
+  --accent-ink: #ffffff;
+  --live: #d0271f;
+  --lose: #a7adb6;
+  --win-box: #1a9c53;
+  --win-ink: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0f12; --bg-wash: #15181c; --card: #15181c; --text: #eceef0;
+    --text-dim: #838d97; --border: #262b31; --accent: #ff8c3a; --accent-ink: #16110a;
+    --live: #ff453a; --lose: #5c636b; --win-box: #2fd673; --win-ink: #0a1f12;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0f12; --bg-wash: #15181c; --card: #15181c; --text: #eceef0;
+  --text-dim: #838d97; --border: #262b31; --accent: #ff8c3a; --accent-ink: #16110a;
+  --live: #ff453a; --lose: #5c636b; --win-box: #2fd673; --win-ink: #0a1f12;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0; padding: 0 1rem 4rem; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.layout {
+  max-width: 1300px; margin: 0 auto; padding: 0 0.5rem;
+  display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start;
+}
+.layout.no-sidebar { grid-template-columns: 1fr; max-width: 980px; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+main { min-width: 0; }
+header {
+  padding: 2.5rem 0 1.75rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2rem;
+}
+.eyebrow {
+  font: 700 0.72rem/1 -apple-system, "Segoe UI", Roboto, sans-serif;
+  text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin: 0 0 0.6rem;
+}
+h1 {
+  font: 800 1.9rem/1.1 "Segoe UI", -apple-system, Roboto, "Arial Narrow", sans-serif;
+  font-stretch: condensed; text-transform: uppercase; letter-spacing: 0.01em;
+  margin: 0 0 0.4rem; text-wrap: balance;
+}
+.subtitle { color: var(--text-dim); font-size: 0.92rem; margin: 0; }
+h2 {
+  font: 700 0.78rem/1 -apple-system, "Segoe UI", sans-serif;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim);
+  margin: 0 0 0.85rem; display: flex; align-items: center; gap: 0.5rem;
+}
+section { margin-bottom: 2.25rem; }
+.section-live h2 { color: var(--live); }
+.ticket-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 0.6rem; align-items: start; }
+.section-completed .ticket-list { grid-template-columns: 1fr; }
+.ticket {
+  background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--border);
+  border-radius: 4px; padding: 0.85rem 1rem; position: relative;
+}
+.ticket-live { border-left-color: var(--live); padding-top: 2.1rem; }
+.ticket-completed { opacity: 0.88; }
+.ticket-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.6rem; }
+.team-line { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.team-line.team-a { justify-content: flex-end; }
+.team-line.team-b { justify-content: flex-start; }
+.flag {
+  width: 20px; height: 14px; object-fit: cover; border-radius: 2px; flex: none;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.team-logo {
+  width: 34px; height: 34px; object-fit: contain; border-radius: 6px; flex: none;
+  background: var(--bg-wash); padding: 4px;
+}
+.team {
+  font: 700 1.15rem/1.25 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font-stretch: condensed; letter-spacing: 0.01em; min-width: 0; overflow-wrap: break-word;
+}
+a.team { color: inherit; text-decoration: none; }
+a.team:hover { color: var(--accent); text-decoration: underline; }
+.vs { color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.score {
+  display: flex; align-items: center; gap: 0.3rem; justify-content: center;
+  font: 700 1.2rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.score .dash { color: var(--text-dim); font-weight: 400; }
+.score .digit { color: var(--lose); min-width: 1.5ch; text-align: center; padding: 0.08rem 0; }
+.score .digit.winner {
+  color: var(--win-ink); background: var(--win-box); border-radius: 4px; padding: 0.08rem 0.4rem;
+}
+.ticket-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+  margin-top: 0.55rem; font-size: 0.78rem; color: var(--text-dim);
+}
+.dot-sep { opacity: 0.6; }
+.when { font-variant-numeric: tabular-nums; }
+.twitch-link { color: var(--accent); text-decoration: none; font-weight: 600; }
+.twitch-link:hover { text-decoration: underline; }
+.result-link { color: var(--text-dim); text-decoration: none; font-weight: 600; }
+.result-link:hover { color: var(--accent); text-decoration: underline; }
+.badge {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 0.35rem;
+  font: 700 0.68rem/1 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 0.25rem 0.55rem; border-radius: 999px;
+}
+.badge-live {
+  background: var(--live); color: #fff;
+  position: absolute; top: 0.7rem; right: 0.85rem; margin-left: 0;
+}
+.badge-live .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #fff;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .badge-live .dot { animation: none; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.badge-done { background: var(--bg-wash); color: var(--text-dim); border: 1px solid var(--border); }
+.badge-drops { background: var(--accent); color: var(--accent-ink); }
+.ticket-row-broadcast { display: block; }
+.broadcast-title {
+  font: 700 0.98rem/1.3 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font-stretch: condensed; letter-spacing: 0.01em;
+}
+.section-bracket h2 { color: var(--accent); }
+.bracket {
+  display: flex; gap: 1.75rem; overflow-x: auto; padding: 0.2rem 0.2rem 0.6rem; align-items: stretch;
+}
+.bracket-col { display: flex; flex-direction: column; min-width: 190px; flex: none; }
+.bracket-aside { border-left: 1px dashed var(--border); padding-left: 1.75rem; }
+.bracket-col-title {
+  font: 700 0.72rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 0.7rem; text-align: center;
+}
+.bracket-matches { display: flex; flex-direction: column; justify-content: space-around; flex: 1; gap: 0.9rem; }
+.bracket-match {
+  display: block; background: var(--card); border: 1px solid var(--border); border-radius: 5px;
+  overflow: hidden; text-decoration: none; color: inherit;
+}
+a.bracket-match:hover { border-color: var(--accent); }
+.bracket-team { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; font-size: 0.82rem; }
+.bracket-team + .bracket-team { border-top: 1px solid var(--border); }
+.bracket-team .flag { width: 16px; height: 11px; }
+.bracket-team .team-logo { width: 20px; height: 20px; padding: 2px; }
+.bracket-team-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; color: var(--text-dim);
+}
+.bracket-team.winner .bracket-team-name { color: var(--text); }
+.bracket-score {
+  font: 700 0.82rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  min-width: 1.4ch; text-align: center; color: var(--text-dim); flex: none;
+}
+.bracket-team.winner .bracket-score {
+  background: var(--win-box); color: var(--win-ink); border-radius: 3px; padding: 0.05rem 0.4rem;
+}
+.sidebar { position: sticky; top: 1rem; display: flex; flex-direction: column; gap: 1.1rem; }
+.comp-banner {
+  display: flex; align-items: center; gap: 0.85rem; padding: 1.1rem;
+  border-radius: 8px; border: 1px solid var(--border); border-top: 3px solid var(--accent);
+  background: var(--card); text-decoration: none; color: inherit;
+}
+.comp-banner:hover { border-color: var(--accent); }
+.comp-banner-logo { width: 48px; height: 48px; object-fit: contain; flex: none; }
+.comp-banner-name {
+  font: 800 1.05rem/1.2 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font-stretch: condensed; text-wrap: balance;
+}
+.comp-banner-date { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.3rem; }
+.comp-panel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem; }
+.comp-panel h3 {
+  font: 700 0.72rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-dim); margin: 0 0 0.75rem;
+}
+.comp-info-row { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.42rem 0; font-size: 0.82rem; }
+.comp-info-row + .comp-info-row { border-top: 1px solid var(--border); }
+.comp-info-row dt { margin: 0; color: var(--text-dim); }
+.comp-info-row dd { margin: 0; font-weight: 600; text-align: right; display: flex; align-items: center; gap: 0.35rem; justify-content: flex-end; }
+.comp-info-row dd .flag { width: 16px; height: 11px; }
+.comp-team-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.comp-team-list a, .comp-team-row {
+  display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.4rem; border-radius: 5px;
+  text-decoration: none; color: var(--text); font-size: 0.84rem; font-weight: 600;
+}
+.comp-team-list a:hover { background: var(--bg-wash); }
+.comp-team-list .team-logo { width: 22px; height: 22px; padding: 2px; }
+.comp-team-list .flag { width: 18px; height: 13px; }
+.comp-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.section-rewards h2 { color: var(--accent); }
+.rewards-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }
+.reward-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.75rem; display: flex; flex-direction: column; align-items: center;
+  text-align: center; gap: 0.35rem; width: 150px;
+}
+.reward-img {
+  width: 64px; height: 64px; object-fit: contain; border-radius: 6px;
+  background: var(--bg-wash); padding: 0.3rem;
+}
+.reward-name { font: 700 0.82rem/1.25 "Segoe UI", -apple-system, sans-serif; }
+.reward-time {
+  font: 700 0.7rem/1 -apple-system, sans-serif; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.reward-campaign { font-size: 0.7rem; color: var(--text-dim); }
+.empty {
+  color: var(--text-dim); font-size: 0.88rem; padding: 1rem; border: 1px dashed var(--border);
+  border-radius: 4px; background: var(--bg-wash);
+}
+footer {
+  margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+  color: var(--text-dim); font-size: 0.76rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+}
+a { color: inherit; }
+.site-nav { display: flex; gap: 1.25rem; margin-top: 0.9rem; }
+.site-nav a {
+  color: var(--text-dim); text-decoration: none; font: 700 0.78rem/1 -apple-system, "Segoe UI", sans-serif;
+  text-transform: uppercase; letter-spacing: 0.06em; padding-bottom: 0.2rem; border-bottom: 2px solid transparent;
+}
+.site-nav a:hover { color: var(--text); }
+.site-nav a.current { color: var(--accent); border-bottom-color: var(--accent); }
+.archive-note { color: var(--text-dim); font-size: 0.86rem; margin: -1rem 0 2rem; }
+.drops-group { margin-bottom: 2.25rem; }
+.drops-group h2 {
+  font: 700 0.78rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-dim); margin: 0 0 0.85rem; display: flex; align-items: baseline; gap: 0.6rem;
+}
+.drops-group h2 .drops-group-dates { color: var(--text-dim); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.78rem; }
+.reward-card.expired { opacity: 0.55; }
+.reward-status {
+  font: 700 0.62rem/1 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-dim); background: var(--bg-wash); border-radius: 999px; padding: 0.15rem 0.5rem;
+}
+.events-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.event-row {
+  display: flex; align-items: center; gap: 1rem; background: var(--card); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.9rem 1.1rem; text-decoration: none; color: inherit;
+}
+.event-row:hover { border-color: var(--accent); }
+.event-row-logo { width: 40px; height: 40px; object-fit: contain; flex: none; background: var(--bg-wash); border-radius: 6px; padding: 4px; }
+.event-row-main { flex: 1; min-width: 0; }
+.event-row-name { font: 800 1rem/1.3 "Segoe UI", -apple-system, "Arial Narrow", sans-serif; font-stretch: condensed; }
+.event-row-meta { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.2rem; }
+.event-row-winner { text-align: right; flex: none; }
+.event-row-winner-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+.event-row-winner-name { font: 700 0.9rem/1.3 "Segoe UI", -apple-system, sans-serif; color: var(--win-box); }
+.event-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+.event-header-logo { width: 56px; height: 56px; object-fit: contain; flex: none; background: var(--bg-wash); border-radius: 8px; padding: 6px; }
+
+</style>
+</head>
+<body>
+<div class="layout no-sidebar">
+<main>
+  <header>
+    <p class="eyebrow">Rainbow Six Siege · Esports</p>
+    <h1>Drops Archive</h1>
+    <p class="subtitle">A permanent record of every Twitch drops campaign tracked on this site.</p>
+    <nav class="site-nav"><a href="index.html">Ops Board</a><a href="drops.html" class="current">Drops Archive</a><a href="events.html">Past Events</a></nav>
+  </header>
+  <p class="archive-note">Every drops campaign this site has seen, active or expired — twitchdrops.app only keeps an expired reward visible for a while before rotating it off the page entirely, so this keeps a permanent record.</p>
+    <section class="drops-group">
+      <h2>EWC 2026 DAY 10 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/78098104-5b9d-4554-8fb3-26c7d1df99f7.jpeg" alt="Esports Pack EWC 2026" loading="lazy">
+      <div class="reward-name">Esports Pack EWC 2026</div>
+      <div class="reward-time">Watch 1h</div>
+      <span class="reward-status">Expired</span>
+    </article>
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/3ab69f90-e063-48d4-a912-cef9733dc199.png" alt="Thatcher Weapon EWC 26" loading="lazy">
+      <div class="reward-name">Thatcher Weapon EWC 26</div>
+      <div class="reward-time">Watch 5h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>EWC 2026 DAY 7 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/f0e7a1e8-d402-4a86-9093-82b5c9f3cfd5.png" alt="Thatcher Portrait EWC 26" loading="lazy">
+      <div class="reward-name">Thatcher Portrait EWC 26</div>
+      <div class="reward-time">Watch 4h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>EWC 2026 DAY 8 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/412db16b-9b44-4131-81d3-8300fb6f7b3e.png" alt="Thatcher Headgear EWC 26" loading="lazy">
+      <div class="reward-name">Thatcher Headgear EWC 26</div>
+      <div class="reward-time">Watch 4h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>EWC 2026 DAY 9 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/03b8d19f-9df8-4afb-bccc-50a039816a9e.png" alt="Thatcher Uniform EWC 26" loading="lazy">
+      <div class="reward-name">Thatcher Uniform EWC 26</div>
+      <div class="reward-time">Watch 4h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>EWC 2026 REVEAL PANEL <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/966088f1-16ae-4d9b-bb8d-29d187d78103.png" alt="Y11S3 Reveal Panel" loading="lazy">
+      <div class="reward-name">Y11S3 Reveal Panel</div>
+      <div class="reward-time">Watch 30m</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S - Jynxzi Tournament <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/900dfb16-3306-4d55-982c-6415014d6c7f.png" alt="Jynxzi M590A1 Weapon Skin" loading="lazy">
+      <div class="reward-name">Jynxzi M590A1 Weapon Skin</div>
+      <div class="reward-time">1 sub</div>
+      <span class="reward-status">Expired</span>
+    </article>
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/67cc7d3e-a1c2-40ee-8133-f8dd02e7547b.png" alt="X1 Alpha Pack" loading="lazy">
+      <div class="reward-name">X1 Alpha Pack</div>
+      <div class="reward-time">Watch 30m</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S - Rainbow is Magic <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/6fc53ce3-ddbd-4315-8a1c-18f0a38d7e1f.png" alt="Mostly Bark" loading="lazy">
+      <div class="reward-name">Mostly Bark</div>
+      <div class="reward-time">Watch 2h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S - Y11S2 Drops <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/47a24d23-7e6c-494e-bdba-f7ac8497c1dc.png" alt="&quot;LEAD-LINED&quot; CSRX-3 Skin" loading="lazy">
+      <div class="reward-name">&quot;LEAD-LINED&quot; CSRX-3 Skin</div>
+      <div class="reward-time">Watch 3h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S - Year 11 Season 1 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/8a609489-8de6-4fe4-897d-455baad44f29.png" alt="AK-12 Variant" loading="lazy">
+      <div class="reward-name">AK-12 Variant</div>
+      <div class="reward-time">Watch 3h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S - Year 11 Season 2 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/7c79c34b-033a-40eb-823e-0176ed76e737.png" alt="&quot;EXPECTED FEAST&quot; MP5SD" loading="lazy">
+      <div class="reward-name">&quot;EXPECTED FEAST&quot; MP5SD</div>
+      <div class="reward-time">Watch 3h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S Hot Token <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/a493c160-e4d2-467a-b927-243b6bb310ac.png" alt="Hot Token" loading="lazy">
+      <div class="reward-name">Hot Token</div>
+      <div class="reward-time">Watch 2h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S KICKOFF WEEK 4 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/1a3c1d77-eda2-4125-a477-e3bcd32dd3bd.jpeg" alt="Esports Pack KickOff 2026" loading="lazy">
+      <div class="reward-name">Esports Pack KickOff 2026</div>
+      <div class="reward-time">Watch 1h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S KICKOFF WEEKEND 5 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/1a3c1d77-eda2-4125-a477-e3bcd32dd3bd.jpeg" alt="Esports Pack 2026" loading="lazy">
+      <div class="reward-name">Esports Pack 2026</div>
+      <div class="reward-time">Watch 3h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S S1 2026 13 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/bd312433-f737-4c10-9b39-ce0cf40bc77a.jpeg" alt="Esports Pack 2026 S1.2" loading="lazy">
+      <div class="reward-name">Esports Pack 2026 S1.2</div>
+      <div class="reward-time">Watch 1h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S S1 2026 7 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/8e622357-110d-4e67-88b5-e04da5a0d581.jpeg" alt="Esports Pack 2026 Stage 1" loading="lazy">
+      <div class="reward-name">Esports Pack 2026 Stage 1</div>
+      <div class="reward-time">Watch 1h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S SLC FINALS <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/8d04a254-4093-4b28-bda6-413c1d25546b.png" alt="AURIC FIELD L85A2 WS" loading="lazy">
+      <div class="reward-name">AURIC FIELD L85A2 WS</div>
+      <div class="reward-time">Watch 5h</div>
+      <span class="reward-status">Expired</span>
+    </article>
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/31066780-0f49-4feb-9eee-14f0bbaba3f7.jpeg" alt="SLC ESPORTS PACK" loading="lazy">
+      <div class="reward-name">SLC ESPORTS PACK</div>
+      <div class="reward-time">Watch 1h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S SLC PANEL <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/27dbf82a-325d-486e-baea-3b6a4232e3a6.jpeg" alt="Y11S2 REVEAL" loading="lazy">
+      <div class="reward-name">Y11S2 REVEAL</div>
+      <div class="reward-time">Watch 30m</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S SLC PLAY-INS <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/11bee57b-9a01-47bd-922b-f34aa4c06d3d.png" alt="HIDDEN CRAFT CHARM" loading="lazy">
+      <div class="reward-name">HIDDEN CRAFT CHARM</div>
+      <div class="reward-time">Watch 13h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S SLC PLAYOFFS 2 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/0fd7a4bb-085f-4328-acba-450f243d1798.png" alt="STATUARY PARA308 WS" loading="lazy">
+      <div class="reward-name">STATUARY PARA308 WS</div>
+      <div class="reward-time">Watch 4h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S SLC SWISS 1 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/866f7ff8-14e2-4890-bf3b-495f2a71101f.png" alt="TRUE FACE CHARM" loading="lazy">
+      <div class="reward-name">TRUE FACE CHARM</div>
+      <div class="reward-time">Watch 13h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>R6S SLC SWISS 2 <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/3e043cc2-53ef-43e6-a223-f7e702f5c71d.jpeg" alt="POLISHED PERFECTION BGD" loading="lazy">
+      <div class="reward-name">POLISHED PERFECTION BGD</div>
+      <div class="reward-time">Watch 13h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>Unicorn Tachanka <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/7223443e-aa19-4e05-8289-4e8dfbc04dde.png" alt="Unicorn Tachanka" loading="lazy">
+      <div class="reward-name">Unicorn Tachanka</div>
+      <div class="reward-time">1 sub</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+    <section class="drops-group">
+      <h2>Y11S1 - [REDACTED] Event <span class="drops-group-dates">21 Aug 2026</span></h2>
+      <div class="rewards-grid">
+    <article class="reward-card expired">
+      <img class="reward-img" src="https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/7e81332c-534e-48e7-af0a-5f647be769ed.png" alt="Hydroponic Vector .45 ACP" loading="lazy">
+      <div class="reward-name">Hydroponic Vector .45 ACP</div>
+      <div class="reward-time">Watch 2h</div>
+      <span class="reward-status">Expired</span>
+    </article></div>
+    </section>
+</main>
+
+</div>
+</body>
+</html>

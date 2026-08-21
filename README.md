@@ -16,6 +16,8 @@ Sections: Live now, Active drops, Upcoming today, Upcoming (next 30 days), Playo
 
 Rebuild frequency adapts automatically: every `SITE_BUILD_INTERVAL_MINUTES` (10) while a match is live or one's scheduled to start within `ACTIVE_LOOKAHEAD_HOURS` (48h), otherwise every `SITE_IDLE_BUILD_INTERVAL_MINUTES` (24h) - so quiet stretches between tournaments don't spam commits or Pages rebuilds for a page that isn't changing anyway.
 
+Two more pages, linked from the nav bar on every page: **Drops Archive** (`drops.html`) — every drops campaign ever seen, active or expired, grouped by campaign — and **Past Events** (`events.html` → `events/<id>-<slug>.html`) — every tournament this site has ever featured as its active one, each with a permanent snapshot of its final bracket and competition info. Both are built from small JSON files (`archive/drops.json`, `archive/tournaments.json`, committed alongside `docs/`) that accumulate over time from data the live page is fetching anyway, so archiving costs no extra requests and updates on the same cadence as everything else - no separate refresh schedule needed.
+
 ## Data sources
 
 - **Ubisoft's official esports page** — authoritative (has a real `live` flag and final scores), but only covers whatever event Ubisoft is currently spotlighting on that page.
@@ -43,3 +45,4 @@ That starts both services. State (which matches/live-transitions were already no
 - Set `RUN_ON_START=true` in `.env` to make either service run once immediately on startup instead of waiting for its first scheduled slot — useful when testing.
 - siege.gg's match data comes from its public JSON API (`/api/stats/matches`, `/api/stats/competitions/<id>/matches`). Its per-competition info (prize pool, region, venue, participating teams) has no API - it's scraped out of the competition page's embedded Nuxt payload instead, so that part is more likely to break if siege.gg changes their frontend.
 - Team names aren't always spelled identically across sources (e.g. "DarkZero" vs "DarkZero Esports"), so flags/logos/results are matched by a normalized team name, not an exact string match.
+- The drops/events archives only start accumulating from whenever this feature first ran - there's no way to backfill genuinely past history the site never saw live, since twitchdrops.app and the bracket/sidebar only ever expose "current" data.

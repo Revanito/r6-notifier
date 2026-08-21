@@ -8,9 +8,10 @@ Two public data sources, merged and de-duplicated:
 """
 import json
 import logging
+import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import unquote
 
 import requests
@@ -70,17 +71,15 @@ def fetch_twitch_live_info(client_id, client_secret, channels):
     return info
 
 
-def fetch_active_drops():
-    """Scrapes twitchdrops.app's public R6 Siege page for real drops-campaign
-    data: which channels are currently eligible for drops, and what the
-    rewards actually are. This site publishes a plain-text chatbot API
-    (twitchdrops.app/api/chatbot/...) built for public consumption, so
-    scraping its HTML for the same data is in the same spirit.
+def _scrape_drops_page():
+    """Shared scrape backing both fetch_active_drops() (live page, active
+    only) and fetch_all_drops() (archiving, active + expired - twitchdrops.app
+    keeps recently-expired cards on the same page for a while, tagged with an
+    extra "drop-expired" class, before eventually rotating them out entirely).
 
-    Returns (rewards, active_channels):
-    - rewards: currently-active rewards only (the page tags expired ones
-      with a "drop-expired" class we filter out) -
-      [{"name", "watch_time", "campaign", "image"}, ...]
+    Returns (all_cards, active_channels):
+    - all_cards: every reward card found, each tagged "expired" -
+      [{"name", "watch_time", "campaign", "image", "expired"}, ...]
     - active_channels: lowercased set of channel logins eligible right now
       (campaign banners whose countdown hasn't ended yet)
     """
@@ -88,17 +87,18 @@ def fetch_active_drops():
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    rewards = []
-    for card in soup.select(".drop-card:not(.drop-expired)"):
+    cards = []
+    for card in soup.select(".drop-card"):
         name_el = card.select_one(".drop-name")
         time_el = card.select_one(".drop-time")
         campaign_el = card.select_one(".drop-campaign")
         img_el = card.select_one(".drop-img")
-        rewards.append({
+        cards.append({
             "name": name_el.get_text(strip=True) if name_el else "",
             "watch_time": time_el.get_text(strip=True) if time_el else "",
             "campaign": campaign_el.get_text(strip=True) if campaign_el else "",
             "image": img_el.get("src") if img_el else None,
+            "expired": "drop-expired" in card.get("class", []),
         })
 
     now_ms = time.time() * 1000
@@ -116,7 +116,21 @@ def fetch_active_drops():
             if m:
                 active_channels.add(m.group(1).lower())
 
+    return cards, active_channels
+
+
+def fetch_active_drops():
+    """Currently-active rewards only, for the live page. Returns
+    (rewards, active_channels) - see _scrape_drops_page()."""
+    cards, active_channels = _scrape_drops_page()
+    rewards = [{k: v for k, v in c.items() if k != "expired"} for c in cards if not c["expired"]]
     return rewards, active_channels
+
+
+def fetch_all_drops():
+    """Every reward card currently on the page, active or expired, for
+    archiving. Returns (cards, active_channels) - see _scrape_drops_page()."""
+    return _scrape_drops_page()
 
 
 def _normalize_team_name(name):
@@ -611,3 +625,69 @@ def split_by_status(matches, now=None):
     upcoming = [m for m in matches if not m.get("live") and not m.get("finished") and m["timestamp"] > now]
     completed = [m for m in matches if m.get("finished")]
     return live, upcoming, completed
+
+
+def load_json_archive(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
+        log.exception("archive at %s is corrupt, starting fresh", path)
+        return {}
+
+
+def save_json_archive(path, data):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, sort_keys=True, ensure_ascii=False)
+        f.write("\n")
+
+
+def update_drops_archive(path, cards):
+    """Merges freshly-scraped drop cards (active or expired) into a
+    persistent archive keyed by "campaign|name". twitchdrops.app only keeps
+    an expired card visible for a while before eventually rotating it off
+    the page entirely - this is the only way to retain a reward once that
+    happens, since we only see what's currently on the page each build.
+    Records first/last-seen dates (day granularity is enough here)."""
+    archive = load_json_archive(path)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for card in cards:
+        if not card.get("name"):
+            continue
+        key = f"{card.get('campaign', '')}|{card['name']}"
+        entry = archive.setdefault(key, {
+            "name": card["name"],
+            "campaign": card.get("campaign", ""),
+            "first_seen": today,
+        })
+        entry["watch_time"] = card.get("watch_time") or entry.get("watch_time", "")
+        entry["image"] = card.get("image") or entry.get("image")
+        entry["last_seen"] = today
+        entry["active"] = not card["expired"]  # status as of the last time we saw this card at all
+    save_json_archive(path, archive)
+    return archive
+
+
+def update_tournament_archive(path, comp_id, comp_info, bracket):
+    """Upserts the given tournament's latest known snapshot (bracket +
+    competition info) into a persistent archive keyed by competition_id, or
+    no-ops if there's currently no relevant tournament at all. Meant to be
+    called every build for whichever tournament pick_active_competition()
+    currently considers relevant - since that tournament keeps being
+    "active" for a while after its last match (see pick_active_competition's
+    own docstring), the last upsert before a different tournament takes
+    over has already captured its final, complete state."""
+    if not comp_id:
+        return None
+    archive = load_json_archive(path)
+    archive[str(comp_id)] = {
+        "competition_id": comp_id,
+        "info": comp_info,
+        "bracket": bracket,
+        "updated": datetime.now(timezone.utc).isoformat(),
+    }
+    save_json_archive(path, archive)
+    return archive

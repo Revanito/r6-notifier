@@ -1,6 +1,7 @@
 import html
 import logging
 import os
+import re
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ GIT_USER_EMAIL = os.environ.get("GIT_USER_EMAIL", "r6-notifier-bot@users.noreply
 
 CLONE_DIR = os.environ.get("SITE_CLONE_DIR", "/repo")
 DOCS_SUBDIR = os.environ.get("SITE_DOCS_SUBDIR", "docs")
+ARCHIVE_SUBDIR = os.environ.get("SITE_ARCHIVE_SUBDIR", "archive")
 BRANCH = os.environ.get("SITE_BRANCH", "main")
 
 BUILD_INTERVAL_MINUTES = int(os.environ.get("SITE_BUILD_INTERVAL_MINUTES", "10"))
@@ -41,6 +43,263 @@ RESULTS_WINDOW_DAYS = float(os.environ.get("RESULTS_WINDOW_DAYS", "14"))
 TWITCH_CLIENT_ID = os.environ.get("TWITCH_CLIENT_ID", "")
 TWITCH_CLIENT_SECRET = os.environ.get("TWITCH_CLIENT_SECRET", "")
 TWITCH_CHANNELS = [c.strip().lower() for c in os.environ.get("TWITCH_CHANNELS", "rainbow6").split(",") if c.strip()]
+
+PAGE_CSS = """
+:root {
+  --bg: #eef0f2;
+  --bg-wash: #e4e7ea;
+  --card: #ffffff;
+  --text: #12151a;
+  --text-dim: #5b6470;
+  --border: #d8dce1;
+  --accent: #d9600a;
+  --accent-ink: #ffffff;
+  --live: #d0271f;
+  --lose: #a7adb6;
+  --win-box: #1a9c53;
+  --win-ink: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0f12; --bg-wash: #15181c; --card: #15181c; --text: #eceef0;
+    --text-dim: #838d97; --border: #262b31; --accent: #ff8c3a; --accent-ink: #16110a;
+    --live: #ff453a; --lose: #5c636b; --win-box: #2fd673; --win-ink: #0a1f12;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0f12; --bg-wash: #15181c; --card: #15181c; --text: #eceef0;
+  --text-dim: #838d97; --border: #262b31; --accent: #ff8c3a; --accent-ink: #16110a;
+  --live: #ff453a; --lose: #5c636b; --win-box: #2fd673; --win-ink: #0a1f12;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0; padding: 0 1rem 4rem; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.layout {
+  max-width: 1300px; margin: 0 auto; padding: 0 0.5rem;
+  display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start;
+}
+.layout.no-sidebar { grid-template-columns: 1fr; max-width: 980px; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+main { min-width: 0; }
+header {
+  padding: 2.5rem 0 1.75rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2rem;
+}
+.eyebrow {
+  font: 700 0.72rem/1 -apple-system, "Segoe UI", Roboto, sans-serif;
+  text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin: 0 0 0.6rem;
+}
+h1 {
+  font: 800 1.9rem/1.1 "Segoe UI", -apple-system, Roboto, "Arial Narrow", sans-serif;
+  font-stretch: condensed; text-transform: uppercase; letter-spacing: 0.01em;
+  margin: 0 0 0.4rem; text-wrap: balance;
+}
+.subtitle { color: var(--text-dim); font-size: 0.92rem; margin: 0; }
+h2 {
+  font: 700 0.78rem/1 -apple-system, "Segoe UI", sans-serif;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim);
+  margin: 0 0 0.85rem; display: flex; align-items: center; gap: 0.5rem;
+}
+section { margin-bottom: 2.25rem; }
+.section-live h2 { color: var(--live); }
+.ticket-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 0.6rem; align-items: start; }
+.section-completed .ticket-list { grid-template-columns: 1fr; }
+.ticket {
+  background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--border);
+  border-radius: 4px; padding: 0.85rem 1rem; position: relative;
+}
+.ticket-live { border-left-color: var(--live); padding-top: 2.1rem; }
+.ticket-completed { opacity: 0.88; }
+.ticket-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.6rem; }
+.team-line { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.team-line.team-a { justify-content: flex-end; }
+.team-line.team-b { justify-content: flex-start; }
+.flag {
+  width: 20px; height: 14px; object-fit: cover; border-radius: 2px; flex: none;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.team-logo {
+  width: 34px; height: 34px; object-fit: contain; border-radius: 6px; flex: none;
+  background: var(--bg-wash); padding: 4px;
+}
+.team {
+  font: 700 1.15rem/1.25 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font-stretch: condensed; letter-spacing: 0.01em; min-width: 0; overflow-wrap: break-word;
+}
+a.team { color: inherit; text-decoration: none; }
+a.team:hover { color: var(--accent); text-decoration: underline; }
+.vs { color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.score {
+  display: flex; align-items: center; gap: 0.3rem; justify-content: center;
+  font: 700 1.2rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.score .dash { color: var(--text-dim); font-weight: 400; }
+.score .digit { color: var(--lose); min-width: 1.5ch; text-align: center; padding: 0.08rem 0; }
+.score .digit.winner {
+  color: var(--win-ink); background: var(--win-box); border-radius: 4px; padding: 0.08rem 0.4rem;
+}
+.ticket-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+  margin-top: 0.55rem; font-size: 0.78rem; color: var(--text-dim);
+}
+.dot-sep { opacity: 0.6; }
+.when { font-variant-numeric: tabular-nums; }
+.twitch-link { color: var(--accent); text-decoration: none; font-weight: 600; }
+.twitch-link:hover { text-decoration: underline; }
+.result-link { color: var(--text-dim); text-decoration: none; font-weight: 600; }
+.result-link:hover { color: var(--accent); text-decoration: underline; }
+.badge {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 0.35rem;
+  font: 700 0.68rem/1 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 0.25rem 0.55rem; border-radius: 999px;
+}
+.badge-live {
+  background: var(--live); color: #fff;
+  position: absolute; top: 0.7rem; right: 0.85rem; margin-left: 0;
+}
+.badge-live .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #fff;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .badge-live .dot { animation: none; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.badge-done { background: var(--bg-wash); color: var(--text-dim); border: 1px solid var(--border); }
+.badge-drops { background: var(--accent); color: var(--accent-ink); }
+.ticket-row-broadcast { display: block; }
+.broadcast-title {
+  font: 700 0.98rem/1.3 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font-stretch: condensed; letter-spacing: 0.01em;
+}
+.section-bracket h2 { color: var(--accent); }
+.bracket {
+  display: flex; gap: 1.75rem; overflow-x: auto; padding: 0.2rem 0.2rem 0.6rem; align-items: stretch;
+}
+.bracket-col { display: flex; flex-direction: column; min-width: 190px; flex: none; }
+.bracket-aside { border-left: 1px dashed var(--border); padding-left: 1.75rem; }
+.bracket-col-title {
+  font: 700 0.72rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 0.7rem; text-align: center;
+}
+.bracket-matches { display: flex; flex-direction: column; justify-content: space-around; flex: 1; gap: 0.9rem; }
+.bracket-match {
+  display: block; background: var(--card); border: 1px solid var(--border); border-radius: 5px;
+  overflow: hidden; text-decoration: none; color: inherit;
+}
+a.bracket-match:hover { border-color: var(--accent); }
+.bracket-team { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; font-size: 0.82rem; }
+.bracket-team + .bracket-team { border-top: 1px solid var(--border); }
+.bracket-team .flag { width: 16px; height: 11px; }
+.bracket-team .team-logo { width: 20px; height: 20px; padding: 2px; }
+.bracket-team-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; color: var(--text-dim);
+}
+.bracket-team.winner .bracket-team-name { color: var(--text); }
+.bracket-score {
+  font: 700 0.82rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  min-width: 1.4ch; text-align: center; color: var(--text-dim); flex: none;
+}
+.bracket-team.winner .bracket-score {
+  background: var(--win-box); color: var(--win-ink); border-radius: 3px; padding: 0.05rem 0.4rem;
+}
+.sidebar { position: sticky; top: 1rem; display: flex; flex-direction: column; gap: 1.1rem; }
+.comp-banner {
+  display: flex; align-items: center; gap: 0.85rem; padding: 1.1rem;
+  border-radius: 8px; border: 1px solid var(--border); border-top: 3px solid var(--accent);
+  background: var(--card); text-decoration: none; color: inherit;
+}
+.comp-banner:hover { border-color: var(--accent); }
+.comp-banner-logo { width: 48px; height: 48px; object-fit: contain; flex: none; }
+.comp-banner-name {
+  font: 800 1.05rem/1.2 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
+  font-stretch: condensed; text-wrap: balance;
+}
+.comp-banner-date { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.3rem; }
+.comp-panel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem; }
+.comp-panel h3 {
+  font: 700 0.72rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-dim); margin: 0 0 0.75rem;
+}
+.comp-info-row { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.42rem 0; font-size: 0.82rem; }
+.comp-info-row + .comp-info-row { border-top: 1px solid var(--border); }
+.comp-info-row dt { margin: 0; color: var(--text-dim); }
+.comp-info-row dd { margin: 0; font-weight: 600; text-align: right; display: flex; align-items: center; gap: 0.35rem; justify-content: flex-end; }
+.comp-info-row dd .flag { width: 16px; height: 11px; }
+.comp-team-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.comp-team-list a, .comp-team-row {
+  display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.4rem; border-radius: 5px;
+  text-decoration: none; color: var(--text); font-size: 0.84rem; font-weight: 600;
+}
+.comp-team-list a:hover { background: var(--bg-wash); }
+.comp-team-list .team-logo { width: 22px; height: 22px; padding: 2px; }
+.comp-team-list .flag { width: 18px; height: 13px; }
+.comp-team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.section-rewards h2 { color: var(--accent); }
+.rewards-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }
+.reward-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.75rem; display: flex; flex-direction: column; align-items: center;
+  text-align: center; gap: 0.35rem; width: 150px;
+}
+.reward-img {
+  width: 64px; height: 64px; object-fit: contain; border-radius: 6px;
+  background: var(--bg-wash); padding: 0.3rem;
+}
+.reward-name { font: 700 0.82rem/1.25 "Segoe UI", -apple-system, sans-serif; }
+.reward-time {
+  font: 700 0.7rem/1 -apple-system, sans-serif; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.reward-campaign { font-size: 0.7rem; color: var(--text-dim); }
+.empty {
+  color: var(--text-dim); font-size: 0.88rem; padding: 1rem; border: 1px dashed var(--border);
+  border-radius: 4px; background: var(--bg-wash);
+}
+footer {
+  margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+  color: var(--text-dim); font-size: 0.76rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+}
+a { color: inherit; }
+.site-nav { display: flex; gap: 1.25rem; margin-top: 0.9rem; }
+.site-nav a {
+  color: var(--text-dim); text-decoration: none; font: 700 0.78rem/1 -apple-system, "Segoe UI", sans-serif;
+  text-transform: uppercase; letter-spacing: 0.06em; padding-bottom: 0.2rem; border-bottom: 2px solid transparent;
+}
+.site-nav a:hover { color: var(--text); }
+.site-nav a.current { color: var(--accent); border-bottom-color: var(--accent); }
+.archive-note { color: var(--text-dim); font-size: 0.86rem; margin: -1rem 0 2rem; }
+.drops-group { margin-bottom: 2.25rem; }
+.drops-group h2 {
+  font: 700 0.78rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-dim); margin: 0 0 0.85rem; display: flex; align-items: baseline; gap: 0.6rem;
+}
+.drops-group h2 .drops-group-dates { color: var(--text-dim); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.78rem; }
+.reward-card.expired { opacity: 0.55; }
+.reward-status {
+  font: 700 0.62rem/1 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-dim); background: var(--bg-wash); border-radius: 999px; padding: 0.15rem 0.5rem;
+}
+.events-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.event-row {
+  display: flex; align-items: center; gap: 1rem; background: var(--card); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.9rem 1.1rem; text-decoration: none; color: inherit;
+}
+.event-row:hover { border-color: var(--accent); }
+.event-row-logo { width: 40px; height: 40px; object-fit: contain; flex: none; background: var(--bg-wash); border-radius: 6px; padding: 4px; }
+.event-row-main { flex: 1; min-width: 0; }
+.event-row-name { font: 800 1rem/1.3 "Segoe UI", -apple-system, "Arial Narrow", sans-serif; font-stretch: condensed; }
+.event-row-meta { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.2rem; }
+.event-row-winner { text-align: right; flex: none; }
+.event-row-winner-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+.event-row-winner-name { font: 700 0.9rem/1.3 "Segoe UI", -apple-system, sans-serif; color: var(--win-box); }
+.event-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+.event-header-logo { width: 56px; height: 56px; object-fit: contain; flex: none; background: var(--bg-wash); border-radius: 8px; padding: 6px; }
+"""
 
 
 def authed_repo_url():
@@ -88,6 +347,62 @@ def fmt_dt(ts):
 
 def e(text):
     return html.escape(str(text))
+
+
+def fmt_date(date_str):
+    if not date_str:
+        return ""
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d %b %Y")
+    except ValueError:
+        return date_str
+
+
+NAV_LINKS = [("index.html", "Ops Board"), ("drops.html", "Drops Archive"), ("events.html", "Past Events")]
+
+
+def render_nav(current, root_prefix=""):
+    def _link(href, label):
+        cls = ' class="current"' if href == current else ""
+        return f'<a href="{root_prefix}{href}"{cls}>{e(label)}</a>'
+
+    links = "".join(_link(href, label) for href, label in NAV_LINKS)
+    return f'<nav class="site-nav">{links}</nav>'
+
+
+def page_shell(title, eyebrow, subtitle, body_html, current_nav, sidebar_html="", root_prefix=""):
+    """Shared document wrapper (head/style/header/nav/footer) for every page
+    on the site, so drops.html/events.html/events/<id>.html stay visually
+    consistent with index.html without duplicating the ~250-line stylesheet.
+    root_prefix lets pages nested one level deep (events/<id>.html) reach
+    back up to the site root for the favicon and nav links."""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{e(title)}</title>
+<link rel="icon" type="image/png" href="{root_prefix}favicon.png">
+<style>
+{PAGE_CSS}
+</style>
+</head>
+<body>
+<div class="layout{'' if sidebar_html else ' no-sidebar'}">
+<main>
+  <header>
+    <p class="eyebrow">{e(eyebrow)}</p>
+    <h1>{e(title)}</h1>
+    <p class="subtitle">{subtitle}</p>
+    {render_nav(current_nav, root_prefix)}
+  </header>
+  {body_html}
+</main>
+{sidebar_html}
+</div>
+</body>
+</html>
+"""
 
 
 def render_team(name, side_class, team_links, flag_url=None, logo_url=None):
@@ -404,226 +719,7 @@ def build_html(live, upcoming, completed, generated_at, twitch_info=None, broadc
 <title>R6 Ops Board</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <style>
-:root {{
-  --bg: #eef0f2;
-  --bg-wash: #e4e7ea;
-  --card: #ffffff;
-  --text: #12151a;
-  --text-dim: #5b6470;
-  --border: #d8dce1;
-  --accent: #d9600a;
-  --accent-ink: #ffffff;
-  --live: #d0271f;
-  --lose: #a7adb6;
-  --win-box: #1a9c53;
-  --win-ink: #ffffff;
-}}
-@media (prefers-color-scheme: dark) {{
-  :root:not([data-theme="light"]) {{
-    --bg: #0d0f12; --bg-wash: #15181c; --card: #15181c; --text: #eceef0;
-    --text-dim: #838d97; --border: #262b31; --accent: #ff8c3a; --accent-ink: #16110a;
-    --live: #ff453a; --lose: #5c636b; --win-box: #2fd673; --win-ink: #0a1f12;
-  }}
-}}
-:root[data-theme="dark"] {{
-  --bg: #0d0f12; --bg-wash: #15181c; --card: #15181c; --text: #eceef0;
-  --text-dim: #838d97; --border: #262b31; --accent: #ff8c3a; --accent-ink: #16110a;
-  --live: #ff453a; --lose: #5c636b; --win-box: #2fd673; --win-ink: #0a1f12;
-}}
-* {{ box-sizing: border-box; }}
-html {{ background: var(--bg); }}
-body {{
-  margin: 0; padding: 0 1rem 4rem; background: var(--bg); color: var(--text);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}}
-.layout {{
-  max-width: 1300px; margin: 0 auto; padding: 0 0.5rem;
-  display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start;
-}}
-.layout.no-sidebar {{ grid-template-columns: 1fr; max-width: 980px; }}
-@media (max-width: 860px) {{ .layout {{ grid-template-columns: 1fr; }} }}
-main {{ min-width: 0; }}
-header {{
-  padding: 2.5rem 0 1.75rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 2rem;
-}}
-.eyebrow {{
-  font: 700 0.72rem/1 -apple-system, "Segoe UI", Roboto, sans-serif;
-  text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); margin: 0 0 0.6rem;
-}}
-h1 {{
-  font: 800 1.9rem/1.1 "Segoe UI", -apple-system, Roboto, "Arial Narrow", sans-serif;
-  font-stretch: condensed; text-transform: uppercase; letter-spacing: 0.01em;
-  margin: 0 0 0.4rem; text-wrap: balance;
-}}
-.subtitle {{ color: var(--text-dim); font-size: 0.92rem; margin: 0; }}
-h2 {{
-  font: 700 0.78rem/1 -apple-system, "Segoe UI", sans-serif;
-  text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim);
-  margin: 0 0 0.85rem; display: flex; align-items: center; gap: 0.5rem;
-}}
-section {{ margin-bottom: 2.25rem; }}
-.section-live h2 {{ color: var(--live); }}
-.ticket-list {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 0.6rem; align-items: start; }}
-.section-completed .ticket-list {{ grid-template-columns: 1fr; }}
-.ticket {{
-  background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--border);
-  border-radius: 4px; padding: 0.85rem 1rem; position: relative;
-}}
-.ticket-live {{ border-left-color: var(--live); padding-top: 2.1rem; }}
-.ticket-completed {{ opacity: 0.88; }}
-.ticket-row {{ display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.6rem; }}
-.team-line {{ display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; }}
-.team-line.team-a {{ justify-content: flex-end; }}
-.team-line.team-b {{ justify-content: flex-start; }}
-.flag {{
-  width: 20px; height: 14px; object-fit: cover; border-radius: 2px; flex: none;
-  box-shadow: 0 0 0 1px var(--border);
-}}
-.team-logo {{
-  width: 34px; height: 34px; object-fit: contain; border-radius: 6px; flex: none;
-  background: var(--bg-wash); padding: 4px;
-}}
-.team {{
-  font: 700 1.15rem/1.25 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
-  font-stretch: condensed; letter-spacing: 0.01em; min-width: 0; overflow-wrap: break-word;
-}}
-a.team {{ color: inherit; text-decoration: none; }}
-a.team:hover {{ color: var(--accent); text-decoration: underline; }}
-.vs {{ color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }}
-.score {{
-  display: flex; align-items: center; gap: 0.3rem; justify-content: center;
-  font: 700 1.2rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
-  font-variant-numeric: tabular-nums;
-}}
-.score .dash {{ color: var(--text-dim); font-weight: 400; }}
-.score .digit {{ color: var(--lose); min-width: 1.5ch; text-align: center; padding: 0.08rem 0; }}
-.score .digit.winner {{
-  color: var(--win-ink); background: var(--win-box); border-radius: 4px; padding: 0.08rem 0.4rem;
-}}
-.ticket-meta {{
-  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
-  margin-top: 0.55rem; font-size: 0.78rem; color: var(--text-dim);
-}}
-.dot-sep {{ opacity: 0.6; }}
-.when {{ font-variant-numeric: tabular-nums; }}
-.twitch-link {{ color: var(--accent); text-decoration: none; font-weight: 600; }}
-.twitch-link:hover {{ text-decoration: underline; }}
-.result-link {{ color: var(--text-dim); text-decoration: none; font-weight: 600; }}
-.result-link:hover {{ color: var(--accent); text-decoration: underline; }}
-.badge {{
-  margin-left: auto; display: inline-flex; align-items: center; gap: 0.35rem;
-  font: 700 0.68rem/1 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.06em;
-  padding: 0.25rem 0.55rem; border-radius: 999px;
-}}
-.badge-live {{
-  background: var(--live); color: #fff;
-  position: absolute; top: 0.7rem; right: 0.85rem; margin-left: 0;
-}}
-.badge-live .dot {{
-  width: 6px; height: 6px; border-radius: 50%; background: #fff;
-  animation: pulse 1.6s ease-in-out infinite;
-}}
-@media (prefers-reduced-motion: reduce) {{ .badge-live .dot {{ animation: none; }} }}
-@keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.35; }} }}
-.badge-done {{ background: var(--bg-wash); color: var(--text-dim); border: 1px solid var(--border); }}
-.badge-drops {{ background: var(--accent); color: var(--accent-ink); }}
-.ticket-row-broadcast {{ display: block; }}
-.broadcast-title {{
-  font: 700 0.98rem/1.3 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
-  font-stretch: condensed; letter-spacing: 0.01em;
-}}
-.section-bracket h2 {{ color: var(--accent); }}
-.bracket {{
-  display: flex; gap: 1.75rem; overflow-x: auto; padding: 0.2rem 0.2rem 0.6rem; align-items: stretch;
-}}
-.bracket-col {{ display: flex; flex-direction: column; min-width: 190px; flex: none; }}
-.bracket-aside {{ border-left: 1px dashed var(--border); padding-left: 1.75rem; }}
-.bracket-col-title {{
-  font: 700 0.72rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 0.7rem; text-align: center;
-}}
-.bracket-matches {{ display: flex; flex-direction: column; justify-content: space-around; flex: 1; gap: 0.9rem; }}
-.bracket-match {{
-  display: block; background: var(--card); border: 1px solid var(--border); border-radius: 5px;
-  overflow: hidden; text-decoration: none; color: inherit;
-}}
-a.bracket-match:hover {{ border-color: var(--accent); }}
-.bracket-team {{ display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; font-size: 0.82rem; }}
-.bracket-team + .bracket-team {{ border-top: 1px solid var(--border); }}
-.bracket-team .flag {{ width: 16px; height: 11px; }}
-.bracket-team .team-logo {{ width: 20px; height: 20px; padding: 2px; }}
-.bracket-team-name {{
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-weight: 600; color: var(--text-dim);
-}}
-.bracket-team.winner .bracket-team-name {{ color: var(--text); }}
-.bracket-score {{
-  font: 700 0.82rem/1 ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
-  min-width: 1.4ch; text-align: center; color: var(--text-dim); flex: none;
-}}
-.bracket-team.winner .bracket-score {{
-  background: var(--win-box); color: var(--win-ink); border-radius: 3px; padding: 0.05rem 0.4rem;
-}}
-.sidebar {{ position: sticky; top: 1rem; display: flex; flex-direction: column; gap: 1.1rem; }}
-.comp-banner {{
-  display: flex; align-items: center; gap: 0.85rem; padding: 1.1rem;
-  border-radius: 8px; border: 1px solid var(--border); border-top: 3px solid var(--accent);
-  background: var(--card); text-decoration: none; color: inherit;
-}}
-.comp-banner:hover {{ border-color: var(--accent); }}
-.comp-banner-logo {{ width: 48px; height: 48px; object-fit: contain; flex: none; }}
-.comp-banner-name {{
-  font: 800 1.05rem/1.2 "Segoe UI", -apple-system, "Arial Narrow", sans-serif;
-  font-stretch: condensed; text-wrap: balance;
-}}
-.comp-banner-date {{ font-size: 0.76rem; color: var(--text-dim); margin-top: 0.3rem; }}
-.comp-panel {{ background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem; }}
-.comp-panel h3 {{
-  font: 700 0.72rem/1 -apple-system, "Segoe UI", sans-serif; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--text-dim); margin: 0 0 0.75rem;
-}}
-.comp-info-row {{ display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.42rem 0; font-size: 0.82rem; }}
-.comp-info-row + .comp-info-row {{ border-top: 1px solid var(--border); }}
-.comp-info-row dt {{ margin: 0; color: var(--text-dim); }}
-.comp-info-row dd {{ margin: 0; font-weight: 600; text-align: right; display: flex; align-items: center; gap: 0.35rem; justify-content: flex-end; }}
-.comp-info-row dd .flag {{ width: 16px; height: 11px; }}
-.comp-team-list {{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }}
-.comp-team-list a, .comp-team-row {{
-  display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.4rem; border-radius: 5px;
-  text-decoration: none; color: var(--text); font-size: 0.84rem; font-weight: 600;
-}}
-.comp-team-list a:hover {{ background: var(--bg-wash); }}
-.comp-team-list .team-logo {{ width: 22px; height: 22px; padding: 2px; }}
-.comp-team-list .flag {{ width: 18px; height: 13px; }}
-.comp-team-name {{ flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-.section-rewards h2 {{ color: var(--accent); }}
-.rewards-grid {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }}
-.reward-card {{
-  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-  padding: 0.75rem; display: flex; flex-direction: column; align-items: center;
-  text-align: center; gap: 0.35rem; width: 150px;
-}}
-.reward-img {{
-  width: 64px; height: 64px; object-fit: contain; border-radius: 6px;
-  background: var(--bg-wash); padding: 0.3rem;
-}}
-.reward-name {{ font: 700 0.82rem/1.25 "Segoe UI", -apple-system, sans-serif; }}
-.reward-time {{
-  font: 700 0.7rem/1 -apple-system, sans-serif; color: var(--accent);
-  text-transform: uppercase; letter-spacing: 0.03em;
-}}
-.reward-campaign {{ font-size: 0.7rem; color: var(--text-dim); }}
-.empty {{
-  color: var(--text-dim); font-size: 0.88rem; padding: 1rem; border: 1px dashed var(--border);
-  border-radius: 4px; background: var(--bg-wash);
-}}
-footer {{
-  margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
-  color: var(--text-dim); font-size: 0.76rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
-}}
-a {{ color: inherit; }}
+{PAGE_CSS}
 </style>
 </head>
 <body>
@@ -632,7 +728,8 @@ a {{ color: inherit; }}
   <header>
     <p class="eyebrow">Rainbow Six Siege · Esports</p>
     <h1>Ops Board</h1>
-    <p class="subtitle">Live status, upcoming matches and recent results, pulled from Ubisoft's official feed and Liquipedia.</p>
+    <p class="subtitle">Live status, upcoming matches, recent results, and archives of past drops and events, pulled from Ubisoft's official feed and Liquipedia.</p>
+    {render_nav("index.html")}
   </header>
   {sections}
   <footer>
@@ -645,6 +742,137 @@ a {{ color: inherit; }}
 </body>
 </html>
 """
+
+
+def render_archive_reward_card(entry):
+    img_html = f'<img class="reward-img" src="{e(entry["image"])}" alt="{e(entry["name"])}" loading="lazy">' if entry.get("image") else ""
+    active = bool(entry.get("active"))
+    cls = "reward-card" if active else "reward-card expired"
+    status = "Active" if active else "Expired"
+    return f"""
+    <article class="{cls}">
+      {img_html}
+      <div class="reward-name">{e(entry["name"])}</div>
+      <div class="reward-time">{e(entry.get("watch_time", ""))}</div>
+      <span class="reward-status">{e(status)}</span>
+    </article>"""
+
+
+def build_drops_page(archive):
+    groups = {}
+    for entry in archive.values():
+        groups.setdefault(entry.get("campaign") or "Uncategorized", []).append(entry)
+    ordered_groups = sorted(groups.items(), key=lambda kv: max(en["last_seen"] for en in kv[1]), reverse=True)
+
+    if not ordered_groups:
+        sections_html = '<p class="empty">No drops recorded yet.</p>'
+    else:
+        sections_html = ""
+        for campaign, entries in ordered_groups:
+            entries_sorted = sorted(entries, key=lambda en: (not en.get("active"), en["name"]))
+            first = min(en["first_seen"] for en in entries)
+            last = max(en["last_seen"] for en in entries)
+            date_range = fmt_date(first) if first == last else f"{fmt_date(first)} – {fmt_date(last)}"
+            cards = "".join(render_archive_reward_card(en) for en in entries_sorted)
+            sections_html += f"""
+    <section class="drops-group">
+      <h2>{e(campaign)} <span class="drops-group-dates">{e(date_range)}</span></h2>
+      <div class="rewards-grid">{cards}</div>
+    </section>"""
+
+    note = (
+        '<p class="archive-note">Every drops campaign this site has seen, active or expired — '
+        "twitchdrops.app only keeps an expired reward visible for a while before rotating it off "
+        "the page entirely, so this keeps a permanent record.</p>"
+    )
+
+    return page_shell(
+        title="Drops Archive",
+        eyebrow="Rainbow Six Siege · Esports",
+        subtitle=e("A permanent record of every Twitch drops campaign tracked on this site."),
+        body_html=note + sections_html,
+        current_nav="drops.html",
+    )
+
+
+def event_slug(entry):
+    info = entry.get("info") or {}
+    name = info.get("name") or f"tournament-{entry.get('competition_id')}"
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return f"{entry.get('competition_id')}-{slug}"
+
+
+def archived_tournament_winner(bracket):
+    """Best-effort: the winner of whichever main-bracket match (excluding a
+    third-place decider) happened last chronologically - in every format
+    seen so far that's the grand final, without needing to hardcode a round
+    name (those aren't consistent site-to-site, see [[project_r6_notifier]]
+    siege.gg notes)."""
+    main_matches = [m for m in bracket if "third" not in (m.get("round") or "").lower()]
+    if not main_matches:
+        return None
+    final = max(main_matches, key=lambda m: m.get("timestamp") or 0)
+    w = final.get("winner_index")
+    return final["teams"][w] if w is not None else None
+
+
+def render_event_row(entry):
+    info = entry.get("info") or {}
+    bracket = entry.get("bracket") or []
+    winner = archived_tournament_winner(bracket)
+    logo_html = f'<img class="event-row-logo" src="{e(info["logo_url"])}" alt="" loading="lazy">' if info.get("logo_url") else ""
+    meta_bits = [b for b in (info.get("date"), info.get("region"), info.get("prizepool")) if b]
+    meta = " · ".join(e(b) for b in meta_bits)
+    winner_html = ""
+    if winner:
+        winner_html = f'<div class="event-row-winner"><div class="event-row-winner-label">Winner</div><div class="event-row-winner-name">{e(winner)}</div></div>'
+    return f"""
+    <a class="event-row" href="events/{event_slug(entry)}.html">
+      {logo_html}
+      <div class="event-row-main">
+        <div class="event-row-name">{e(info.get("name") or "Unknown tournament")}</div>
+        <div class="event-row-meta">{meta}</div>
+      </div>
+      {winner_html}
+    </a>"""
+
+
+def build_events_index_page(archive):
+    entries = sorted(archive.values(), key=lambda en: en.get("updated") or "", reverse=True)
+    if entries:
+        body = f'<div class="events-list">{"".join(render_event_row(en) for en in entries)}</div>'
+    else:
+        body = '<p class="empty">No past events recorded yet.</p>'
+
+    note = (
+        '<p class="archive-note">Every tournament this site has featured as its active event, with a '
+        "permanent snapshot of its bracket and info taken once a newer tournament took over.</p>"
+    )
+
+    return page_shell(
+        title="Past Events",
+        eyebrow="Rainbow Six Siege · Esports",
+        subtitle=e("Archived brackets and info for every tournament this site has featured."),
+        body_html=note + body,
+        current_nav="events.html",
+    )
+
+
+def build_event_detail_page(entry):
+    info = entry.get("info") or {}
+    bracket = entry.get("bracket") or []
+    name = info.get("name") or "Tournament"
+    body = render_bracket_section(bracket, None) or '<p class="empty">No bracket data recorded for this event.</p>'
+
+    return page_shell(
+        title=name,
+        eyebrow="Rainbow Six Siege · Esports · Archived Event",
+        subtitle='<a href="../events.html">← Back to Past Events</a>',
+        body_html=body,
+        current_nav="events.html",
+        sidebar_html=render_sidebar(info),
+        root_prefix="../",
+    )
 
 
 def build_and_commit():
@@ -660,9 +888,15 @@ def build_and_commit():
 
     event_active = bool(live) or any(m["timestamp"] <= now + ACTIVE_LOOKAHEAD_HOURS * 3600 for m in upcoming)
 
+    archive_dir = os.path.join(CLONE_DIR, ARCHIVE_SUBDIR)
+    drops_archive_path = os.path.join(archive_dir, "drops.json")
+    tournaments_archive_path = os.path.join(archive_dir, "tournaments.json")
+
     rewards, drops_channels = [], set()
     try:
-        rewards, drops_channels = sources.fetch_active_drops()
+        all_drop_cards, drops_channels = sources.fetch_all_drops()
+        rewards = [c for c in all_drop_cards if not c["expired"]]
+        sources.update_drops_archive(drops_archive_path, all_drop_cards)
     except Exception:
         log.exception("twitch drops fetch failed")
 
@@ -679,6 +913,12 @@ def build_and_commit():
         comp_info = sources.fetch_active_competition_info(active_matches, now=now)
     except Exception:
         log.exception("competition info fetch failed")
+
+    try:
+        comp_id, _ = sources.pick_active_competition(active_matches, now=now)
+        sources.update_tournament_archive(tournaments_archive_path, comp_id, comp_info, bracket)
+    except Exception:
+        log.exception("tournament archive update failed")
 
     twitch_info, broadcasts = {}, []
     if TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET:
@@ -712,8 +952,23 @@ def build_and_commit():
     if not os.path.exists(nojekyll):
         open(nojekyll, "w").close()
 
-    run_git(["add", DOCS_SUBDIR])
-    status = run_git(["status", "--porcelain", "--", DOCS_SUBDIR])
+    drops_archive = sources.load_json_archive(drops_archive_path)
+    with open(os.path.join(docs_dir, "drops.html"), "w", encoding="utf-8") as f:
+        f.write(build_drops_page(drops_archive))
+
+    tournaments_archive = sources.load_json_archive(tournaments_archive_path)
+    with open(os.path.join(docs_dir, "events.html"), "w", encoding="utf-8") as f:
+        f.write(build_events_index_page(tournaments_archive))
+
+    events_dir = os.path.join(docs_dir, "events")
+    os.makedirs(events_dir, exist_ok=True)
+    for entry in tournaments_archive.values():
+        event_path = os.path.join(events_dir, f"{event_slug(entry)}.html")
+        with open(event_path, "w", encoding="utf-8") as f:
+            f.write(build_event_detail_page(entry))
+
+    run_git(["add", DOCS_SUBDIR, ARCHIVE_SUBDIR])
+    status = run_git(["status", "--porcelain", "--", DOCS_SUBDIR, ARCHIVE_SUBDIR])
     if not status.stdout.strip():
         log.info("no changes, skipping commit")
         return event_active

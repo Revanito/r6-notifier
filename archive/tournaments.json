@@ -197,58 +197,28 @@
       "region": "International",
       "teams": [
         {
-          "flag": "https://cdn.siege.gg/flags/br.svg",
-          "logo_url": "https://cdn.siege.gg/org-69-tl-3.png",
-          "name": "Team Liquid",
-          "web_url": "https://siege.gg/teams/285-team-liquid"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/un.svg",
-          "logo_url": "https://cdn.siege.gg/org-1128-weibo.png",
-          "name": "Weibo Gaming",
-          "web_url": "https://siege.gg/teams/742-weibo-gaming"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/cn.svg",
-          "logo_url": "https://cdn.siege.gg/org-1276-agal.png",
-          "name": "AG.AL",
-          "web_url": "https://siege.gg/teams/909-agal"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/jp.svg",
-          "logo_url": "https://cdn.siege.gg/org-1277-cagv.png",
-          "name": "CAG by VARREL",
-          "web_url": "https://siege.gg/teams/108-cag-by-varrel"
-        },
-        {
           "flag": "https://cdn.siege.gg/flags/us.svg",
           "logo_url": "https://cdn.siege.gg/org-536-wc-1.png",
           "name": "Wildcard",
           "web_url": "https://siege.gg/teams/725-wildcard"
         },
         {
-          "flag": "https://cdn.siege.gg/flags/br.svg",
-          "logo_url": "https://cdn.siege.gg/org-24-faze-1.png",
-          "name": "FaZe Clan",
-          "web_url": "https://siege.gg/teams/50-faze-clan"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/au.svg",
-          "logo_url": "https://cdn.siege.gg/org-1169-ep.png",
-          "name": "ENTERPRISE Esports",
-          "web_url": "https://siege.gg/teams/855-enterprise-esports"
-        },
-        {
           "flag": "https://cdn.siege.gg/flags/eu.svg",
-          "logo_url": "https://cdn.siege.gg/org-993-gkay-1.png",
-          "name": "Geekay Esports",
-          "web_url": "https://siege.gg/teams/886-geekay-esports"
+          "logo_url": "https://cdn.siege.gg/org-26-fnc.png",
+          "name": "Fnatic",
+          "web_url": "https://siege.gg/teams/5-fnatic"
         },
         {
-          "flag": "https://cdn.siege.gg/flags/hk.svg",
-          "logo_url": "https://cdn.siege.gg/org-1225-kz.png",
-          "name": "KINGZERO eSports",
-          "web_url": "https://siege.gg/teams/949-kingzero-esports"
+          "flag": "https://cdn.siege.gg/flags/ru.svg",
+          "logo_url": "https://cdn.siege.gg/org-656-vp.png",
+          "name": "Virtus.pro",
+          "web_url": "https://siege.gg/teams/272-virtuspro"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/us.svg",
+          "logo_url": "https://cdn.siege.gg/org-1122-shop.png",
+          "name": "Shopify Rebellion",
+          "web_url": "https://siege.gg/teams/125-shopify-rebellion"
         },
         {
           "flag": "https://cdn.siege.gg/flags/us.svg",
@@ -270,51 +240,9 @@
         },
         {
           "flag": "https://cdn.siege.gg/flags/cn.svg",
-          "logo_url": "https://cdn.siege.gg/org-1229-edg.png",
-          "name": "EDward Gaming",
-          "web_url": "https://siege.gg/teams/954-edward-gaming"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/tw.svg",
-          "logo_url": "https://cdn.siege.gg/org-1228-tyl.png",
-          "name": "TYLOO",
-          "web_url": "https://siege.gg/teams/952-tyloo"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/us.svg",
-          "logo_url": "https://cdn.siege.gg/org-963-m80-1.png",
-          "name": "M80",
-          "web_url": "https://siege.gg/teams/652-m80"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/eu.svg",
-          "logo_url": "https://cdn.siege.gg/org-26-fnc.png",
-          "name": "Fnatic",
-          "web_url": "https://siege.gg/teams/5-fnatic"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/ru.svg",
-          "logo_url": "https://cdn.siege.gg/org-656-vp.png",
-          "name": "Virtus.pro",
-          "web_url": "https://siege.gg/teams/272-virtuspro"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/br.svg",
-          "logo_url": "https://cdn.siege.gg/org-625-furia.png",
-          "name": "FURIA Esports",
-          "web_url": "https://siege.gg/teams/946-furia-esports"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/us.svg",
-          "logo_url": "https://cdn.siege.gg/org-1122-shop.png",
-          "name": "Shopify Rebellion",
-          "web_url": "https://siege.gg/teams/125-shopify-rebellion"
-        },
-        {
-          "flag": "https://cdn.siege.gg/flags/sa.svg",
-          "logo_url": "https://cdn.siege.gg/org-1217-aula.png",
-          "name": "Al Ula",
-          "web_url": "https://siege.gg/teams/826-al-ula"
+          "logo_url": "https://cdn.siege.gg/org-1276-agal.png",
+          "name": "AG.AL",
+          "web_url": "https://siege.gg/teams/909-agal"
         },
         {
           "flag": "https://cdn.siege.gg/flags/au.svg",
@@ -323,16 +251,88 @@
           "web_url": "https://siege.gg/teams/967-chiefs-esports-club"
         },
         {
+          "flag": "https://cdn.siege.gg/flags/tw.svg",
+          "logo_url": "https://cdn.siege.gg/org-1228-tyl.png",
+          "name": "TYLOO",
+          "web_url": "https://siege.gg/teams/952-tyloo"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/au.svg",
+          "logo_url": "https://cdn.siege.gg/org-1169-ep.png",
+          "name": "ENTERPRISE Esports",
+          "web_url": "https://siege.gg/teams/855-enterprise-esports"
+        },
+        {
           "flag": "https://cdn.siege.gg/flags/br.svg",
           "logo_url": "https://cdn.siege.gg/org-1275-ml.png",
           "name": "MIBR.LOS",
           "web_url": "https://siege.gg/teams/947-mibrlos"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/us.svg",
+          "logo_url": "https://cdn.siege.gg/org-963-m80-1.png",
+          "name": "M80",
+          "web_url": "https://siege.gg/teams/652-m80"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/un.svg",
+          "logo_url": "https://cdn.siege.gg/org-1128-weibo.png",
+          "name": "Weibo Gaming",
+          "web_url": "https://siege.gg/teams/742-weibo-gaming"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/br.svg",
+          "logo_url": "https://cdn.siege.gg/org-625-furia.png",
+          "name": "FURIA Esports",
+          "web_url": "https://siege.gg/teams/946-furia-esports"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/eu.svg",
+          "logo_url": "https://cdn.siege.gg/org-993-gkay-1.png",
+          "name": "Geekay Esports",
+          "web_url": "https://siege.gg/teams/886-geekay-esports"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/sa.svg",
+          "logo_url": "https://cdn.siege.gg/org-1217-aula.png",
+          "name": "Al Ula",
+          "web_url": "https://siege.gg/teams/826-al-ula"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/hk.svg",
+          "logo_url": "https://cdn.siege.gg/org-1225-kz.png",
+          "name": "KINGZERO eSports",
+          "web_url": "https://siege.gg/teams/949-kingzero-esports"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/jp.svg",
+          "logo_url": "https://cdn.siege.gg/org-1277-cagv.png",
+          "name": "CAG by VARREL",
+          "web_url": "https://siege.gg/teams/108-cag-by-varrel"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/br.svg",
+          "logo_url": "https://cdn.siege.gg/org-69-tl-3.png",
+          "name": "Team Liquid",
+          "web_url": "https://siege.gg/teams/285-team-liquid"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/br.svg",
+          "logo_url": "https://cdn.siege.gg/org-24-faze-1.png",
+          "name": "FaZe Clan",
+          "web_url": "https://siege.gg/teams/50-faze-clan"
+        },
+        {
+          "flag": "https://cdn.siege.gg/flags/cn.svg",
+          "logo_url": "https://cdn.siege.gg/org-1229-edg.png",
+          "name": "EDward Gaming",
+          "web_url": "https://siege.gg/teams/954-edward-gaming"
         }
       ],
       "type": "LAN",
       "venue": "Paris Expo Porte de Versailles",
       "web_url": "https://siege.gg/competitions/183-esports-world-cup-2026"
     },
-    "updated": "2026-08-21T07:54:59.225883+00:00"
+    "updated": "2026-08-22T07:55:49.116748+00:00"
   }
 }
